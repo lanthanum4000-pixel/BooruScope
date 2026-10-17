@@ -99,7 +99,7 @@ def preprocess(data, device):
     import torch
 
     rgb = load_rgb(data)
-    t = torch.from_numpy(np.ascontiguousarray(rgb)).permute(2, 0, 1).contiguous().to(device)
+    t = torch.from_numpy(np.array(rgb, dtype=np.uint8, copy=True)).permute(2, 0, 1).contiguous().to(device)
     mean = torch.tensor(CLIP_MEAN, device=device).view(3, 1, 1)
     std = torch.tensor(CLIP_STD, device=device).view(3, 1, 1)
     return clip_input(relay(t), mean, std)
