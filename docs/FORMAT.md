@@ -34,7 +34,7 @@ The rotation is a PCA basis trained on a 200,000-post sample; eigenvectors are d
 | scale | f32[dim] |
 | rows | i8[n × dim], `round(v / scale)` clamped to ±127 |
 
-`v` is the unit-length CLIP vector. `scale[j]` is the 99.99th percentile of `|v_j|` over a sample, divided by 127.
+`v` is the unit-length CLIP vector. Every vector was computed from the post's Gelbooru thumbnail (the image at the thumbnail URL above), not from the sample or the original file. `scale[j]` is the 99.99th percentile of `|v_j|` over a sample, divided by 127.
 
 ## Scoring
 

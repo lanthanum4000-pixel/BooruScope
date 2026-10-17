@@ -48,11 +48,16 @@ Regenerate and upload the manifest whenever a data file changes; the installer r
 
 ## Uploading
 
+The repository must be public: the installer downloads without logging in.
+
 ```
-hf upload Lanthanum4000/BooruScope <folder> .
+pip install -U huggingface_hub
+hf auth login
+hf upload-large-folder Lanthanum4000/BooruScope <folder> --repo-type model --exclude manifest.json
+hf upload Lanthanum4000/BooruScope <folder>/manifest.json manifest.json
 ```
 
-Upload the data files before `manifest.json`, so the manifest never points at a file that is not there yet.
+`hf auth login` asks for an access token with write permission (Hugging Face → Settings → Access Tokens). `upload-large-folder` resumes if it is interrupted; run the same command again. The manifest goes last, so it never points at a file that is not there yet.
 
 ## Building a release
 

@@ -47,7 +47,7 @@ Measured quality on 50 random Gelbooru queries (ground truth: exact cosine ranki
 | M96 | 910 MB | 0.64 / 0.92 | 0.94 / 0.90 |
 | M128 | 1,190 MB | 0.69 / 0.94 | 0.95 / 0.90 |
 
-These numbers use query vectors computed on the machine that built the index. Vectors computed on your machine (different decoder, CPU instead of GPU) will differ slightly; how much that costs in recall has not been measured yet.
+Index vectors were computed from each post's Gelbooru thumbnail, the same image BooruScope shows on the result cards. These numbers use query vectors computed on the machine that built the index. Vectors computed on your machine (different decoder, CPU instead of GPU) will differ slightly; how much that costs in recall has not been measured yet.
 
 ## Installing
 
