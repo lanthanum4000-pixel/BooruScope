@@ -22,7 +22,7 @@ type UninstallResult struct {
 	ShortcutErr string   `json:"shortcutError,omitempty"`
 }
 
-var runtimeEntries = []string{"venv", "encoder", "huggingface", "browser-profile", "booruscope.log", "requirements.txt"}
+var runtimeEntries = []string{"venv", "encoder", "huggingface", "browser-profile", "booruscope.log", "requirements.txt", "window.json"}
 
 func Uninstall(dir, selfExe string, removeShortcuts func(exe string) error) (UninstallResult, error) {
 	abs, err := filepath.Abs(dir)

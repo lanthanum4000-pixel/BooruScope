@@ -19,6 +19,7 @@ import (
 	"testing/fstest"
 	"time"
 
+	"github.com/lanthanum4000-pixel/BooruScope/internal/browser"
 	"github.com/lanthanum4000-pixel/BooruScope/internal/encoder"
 	"github.com/lanthanum4000-pixel/BooruScope/internal/fetch"
 	"github.com/lanthanum4000-pixel/BooruScope/internal/localweb"
@@ -150,6 +151,7 @@ func newHarness(t *testing.T) *harness {
 		Thumbs:       fetch.NewThumbs(1<<20, 2, fakeFetch),
 		Web:          fstest.MapFS{"index.html": {Data: []byte("<meta content=\"{{TOKEN}}\">")}, "lens.html": {Data: []byte("lens {{TOKEN}}")}},
 		SettingsPath: filepath.Join(t.TempDir(), "settings.json"),
+		WindowPath:   filepath.Join(t.TempDir(), "window.json"),
 		OpenURL: func(u string) error {
 			hs.opened = append(hs.opened, u)
 			return nil
@@ -507,5 +509,29 @@ func TestGoogleLensTargets(t *testing.T) {
 	}
 	if page := hs.do("GET", "/lens?q="+out.Query+"&t=wrong", nil, false); page.Code != http.StatusForbidden {
 		t.Fatalf("lens page without token %d", page.Code)
+	}
+}
+
+func TestWindowKeepsRestoreSizeWhenMaximized(t *testing.T) {
+	hs := newHarness(t)
+	post := func(body string) int {
+		return hs.do("POST", "/api/window", strings.NewReader(body), true).Code
+	}
+	if c := post(`{"x":120,"y":80,"w":1100,"h":760,"max":false}`); c != http.StatusNoContent {
+		t.Fatalf("status %d", c)
+	}
+	if c := post(`{"x":-8,"y":-8,"w":1936,"h":1056,"max":true}`); c != http.StatusNoContent {
+		t.Fatalf("status %d", c)
+	}
+	got, ok := browser.LoadWindow(hs.srv.cfg.WindowPath)
+	want := browser.Window{X: 120, Y: 80, W: 1100, H: 760, Max: true}
+	if !ok || got != want {
+		t.Fatalf("saved %+v %v, want %+v", got, ok, want)
+	}
+	if c := post(`{"x":0,"y":0,"w":20,"h":20,"max":false}`); c != http.StatusBadRequest {
+		t.Fatalf("tiny window accepted: %d", c)
+	}
+	if got, _ := browser.LoadWindow(hs.srv.cfg.WindowPath); got != want {
+		t.Fatalf("tiny window overwrote %+v", got)
 	}
 }

@@ -34,9 +34,14 @@
   let lastScrollTop = 0;
   const RISE = { colStep: 0.05, rowStep: 0.08, staggerRows: 4, nearTop: 100 };
   let freshQuery = false;
-  const DRIFT = { keep: 30, perColumn: 9, minSources: 12, durations: [42, 49, 45, 53, 46], storeKey: "booruscope.driftRows", fadeMs: 1300 };
+  const DRIFT = { keep: 500, perColumn: 9, minSources: 12, durations: [42, 49, 45, 53, 46], storeKey: "booruscope.driftRows", fadeMs: 1300 };
   let driftRows = loadDriftRows();
   let driftBuiltFrom = null;
+  let driftSaveTimer = 0;
+  let driftSlots = [];
+  let driftColCount = 0;
+  let driftTarget = null;
+  let driftSwapTick = 0;
   let driftOn = false;
   let driftStopTimer = 0;
   const FX = { aber: 2, cols: 6, breakEvery: 250, liftMs: 980, liftShift: 3, liftScale: 1.03, glitchEvery: 3200, glitchFrac: 0.08, glitchShift: 14, grain: 0.02, wobble: 0.5, wobbleHz: 1, minMs: 900, fadeMs: 1300 };
@@ -410,11 +415,27 @@
     if (i > 0) driftRows.splice(i, 1);
     driftRows.unshift(row);
     if (driftRows.length > DRIFT.keep) driftRows.length = DRIFT.keep;
+    if (!driftSaveTimer) driftSaveTimer = setTimeout(flushDriftRows, 1000);
+  }
+
+  function flushDriftRows() {
+    if (!driftSaveTimer) return;
+    clearTimeout(driftSaveTimer);
+    driftSaveTimer = 0;
     try { localStorage.setItem(DRIFT.storeKey, JSON.stringify(driftRows)); } catch (e) {}
   }
 
-  function driftSources() {
-    const rows = driftRows.slice();
+  function driftCols() {
+    return Math.max(5, Math.min(10, Math.round(el.drift.parentElement.clientWidth / 150)));
+  }
+
+  function driftRandomRows() {
+    const pool = driftRows.slice();
+    for (let i = pool.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [pool[i], pool[j]] = [pool[j], pool[i]];
+    }
+    const rows = pool.slice(0, driftCols() * DRIFT.perColumn);
     const total = (state && state.library && state.library.rows) || 0;
     for (let tries = 0; rows.length < DRIFT.minSources && total > 0 && tries < 200; tries++) {
       const r = Math.floor(Math.random() * total);
@@ -423,32 +444,61 @@
     return rows;
   }
 
-  function buildDrift() {
-    const rows = driftSources();
+  function driftPageRows() {
+    return results.map((r) => r.row);
+  }
+
+  function driftWanted() {
+    return settings.alwaysDrift && results.length ? driftPageRows() : driftRandomRows();
+  }
+
+  function driftPerColumn(cols) {
+    const stage = el.drift.getBoundingClientRect();
+    const tile = Math.max(40, stage.width / cols);
+    return Math.max(DRIFT.perColumn, Math.ceil((stage.height * 1.25) / tile) + 2);
+  }
+
+  function driftRowAt(rows, c, r) {
+    return rows[(c + r * driftColCount) % rows.length];
+  }
+
+  function setDriftTile(img, row) {
+    img.style.visibility = "";
+    img.src = withToken("/api/thumb/" + row);
+  }
+
+  function buildDrift(rows) {
     if (!rows.length) return false;
-    driftBuiltFrom = driftRows.join(",");
-    const cols = Math.max(5, Math.min(10, Math.round(el.drift.parentElement.clientWidth / 150)));
+    driftBuiltFrom = rows.join(",");
+    stopDriftSwap();
+    const cols = driftCols();
+    const per = driftPerColumn(cols);
+    driftColCount = cols;
+    driftSlots = [];
     el.driftScene.style.setProperty("--dw-cols", String(cols));
     const frag = document.createDocumentFragment();
     for (let c = 0; c < cols; c++) {
       const col = div("drift-col" + (c % 2 ? " down" : ""));
       const track = div("drift-track");
-      track.style.setProperty("--dw-duration", DRIFT.durations[c % DRIFT.durations.length] + "s");
+      track.style.setProperty("--dw-duration", (DRIFT.durations[c % DRIFT.durations.length] * per) / DRIFT.perColumn + "s");
       track.style.setProperty("--dw-delay", -c * 3.7 + "s");
-      for (let copy = 0; copy < 2; copy++) {
-        const set = div("drift-set");
-        for (let r = 0; r < DRIFT.perColumn; r++) {
+      const sets = [div("drift-set"), div("drift-set")];
+      for (let r = 0; r < per; r++) {
+        const row = driftRowAt(rows, c, r);
+        const pair = sets.map((set) => {
           const img = new Image();
           img.className = "drift-tile";
           img.alt = "";
           img.decoding = "async";
           img.draggable = false;
-          img.src = withToken("/api/thumb/" + rows[(c + r * cols) % rows.length]);
           img.addEventListener("error", () => { img.style.visibility = "hidden"; });
+          setDriftTile(img, row);
           set.appendChild(img);
-        }
-        track.appendChild(set);
+          return img;
+        });
+        driftSlots.push({ c, r, row, tiles: pair });
       }
+      for (const set of sets) track.appendChild(set);
       col.appendChild(track);
       frag.appendChild(col);
     }
@@ -456,21 +506,49 @@
     return true;
   }
 
-  function refreshDrift() {
-    if (!driftOn || driftRows.join(",") === driftBuiltFrom) return;
-    el.drift.classList.remove("ready");
-    setTimeout(() => {
-      if (!driftOn) return;
-      buildDrift();
-      el.drift.classList.add("ready");
-    }, DRIFT.fadeMs);
+  function showPageInDrift() {
+    if (!driftOn || !settings.alwaysDrift || !results.length) return;
+    const rows = driftPageRows();
+    if (rows.join(",") === driftBuiltFrom) return;
+    driftBuiltFrom = rows.join(",");
+    driftTarget = rows;
+    if (!driftSwapTick) driftSwapTick = setInterval(driftSwapStep, 200);
+  }
+
+  function stopDriftSwap() {
+    clearInterval(driftSwapTick);
+    driftSwapTick = 0;
+    driftTarget = null;
+  }
+
+  function driftSwapStep() {
+    if (!driftOn || !driftTarget) return stopDriftSwap();
+    if (el.drift.classList.contains("paused")) return;
+    const view = el.drift.getBoundingClientRect();
+    const hidden = (img) => {
+      const r = img.getBoundingClientRect();
+      return r.bottom <= view.top || r.top >= view.bottom;
+    };
+    let pending = 0;
+    for (const slot of driftSlots) {
+      const want = driftRowAt(driftTarget, slot.c, slot.r);
+      if (slot.row === want) continue;
+      if (slot.tiles.every(hidden)) {
+        slot.row = want;
+        for (const img of slot.tiles) setDriftTile(img, want);
+      } else {
+        pending++;
+      }
+    }
+    if (!pending) stopDriftSwap();
   }
 
   function updateDrift() {
     const cold = searching && !!state && state.encoder.state !== "ready";
-    if ((settings.alwaysDrift || cold) && !driftOn) driftOn = buildDrift();
+    if ((settings.alwaysDrift || cold) && !driftOn) driftOn = buildDrift(driftWanted());
     else if (driftOn && !settings.alwaysDrift && !searching) driftOn = false;
     const wasOn = el.drift.classList.contains("ready");
+    if (!driftOn) stopDriftSwap();
     el.drift.classList.toggle("ready", driftOn);
     if (driftOn) {
       clearTimeout(driftStopTimer);
@@ -764,6 +842,7 @@
     freshQuery = !!query;
     setMessage(entry.done ? { done: entry.done } : null);
     updateDrift();
+    showPageInDrift();
     render();
     el.results.scrollTop = entry.scroll || 0;
     lastScrollTop = el.results.scrollTop;
@@ -812,7 +891,7 @@
       if (seq === searchSeq) {
         searching = false;
         updateDrift();
-        if (settings.alwaysDrift) setTimeout(refreshDrift, 2500);
+        showPageInDrift();
         render();
         fxEnd();
         poll();
@@ -981,11 +1060,44 @@
   }
 
 
+  let windowSent = "";
+
+  function windowGeometry() {
+    const sc = window.screen;
+    const w = window.outerWidth, h = window.outerHeight, x = window.screenX, y = window.screenY;
+    if (document.fullscreenElement || !w || !h || x <= -30000 || y <= -30000) return null;
+    if (window.innerWidth >= sc.width && window.innerHeight >= sc.height) return null;
+    const max = w >= sc.availWidth && h >= sc.availHeight;
+    return { x: Math.round(x), y: Math.round(y), w: Math.round(w), h: Math.round(h), max };
+  }
+
+  function reportWindow(leaving) {
+    const g = windowGeometry();
+    if (!g) return;
+    const body = JSON.stringify(g);
+    if (body === windowSent) return;
+    windowSent = body;
+    if (leaving) navigator.sendBeacon("/api/window?t=" + encodeURIComponent(TOKEN), body);
+    else fetch("/api/window", { method: "POST", headers: { "X-BooruScope-Token": TOKEN, "Content-Type": "application/json" }, body }).catch(() => {});
+  }
+
   function heartbeat() {
-    const ping = () => fetch("/api/ping", { method: "POST", headers: { "X-BooruScope-Token": TOKEN } }).catch(() => {});
+    const ping = () => {
+      fetch("/api/ping", { method: "POST", headers: { "X-BooruScope-Token": TOKEN } }).catch(() => {});
+      reportWindow(false);
+    };
     ping();
     setInterval(ping, 4000);
-    window.addEventListener("pagehide", () => navigator.sendBeacon("/api/bye?t=" + encodeURIComponent(TOKEN)));
+    let resizeTimer = 0;
+    window.addEventListener("resize", () => {
+      clearTimeout(resizeTimer);
+      resizeTimer = setTimeout(() => reportWindow(false), 800);
+    });
+    window.addEventListener("pagehide", () => {
+      reportWindow(true);
+      flushDriftRows();
+      navigator.sendBeacon("/api/bye?t=" + encodeURIComponent(TOKEN));
+    });
   }
 
   async function init() {

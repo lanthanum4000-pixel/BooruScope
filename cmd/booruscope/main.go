@@ -117,6 +117,7 @@ func main() {
 		Thumbs:       fetch.NewThumbs(fetch.DefaultCacheBytes, fetch.DefaultConcurrency, nil),
 		Web:          web.FS,
 		SettingsPath: filepath.Join(absHome, "settings.json"),
+		WindowPath:   filepath.Join(runtimeDir, "window.json"),
 		OpenURL:      browser.OpenDefault,
 		Logf:         logf,
 		Model:        *model,
@@ -147,7 +148,11 @@ func main() {
 	if !*noWindow {
 		if b, err := browser.Find(*browserPath); err == nil {
 			t0 := time.Now()
-			cmd, err := browser.LaunchApp(b, appURL, filepath.Join(runtimeDir, "browser-profile"))
+			var win *browser.Window
+			if w, ok := browser.LoadWindow(filepath.Join(runtimeDir, "window.json")); ok {
+				win = &w
+			}
+			cmd, err := browser.LaunchApp(b, appURL, filepath.Join(runtimeDir, "browser-profile"), win)
 			if err != nil {
 				logf("window: %v", err)
 				life.NoBrowserProcess()

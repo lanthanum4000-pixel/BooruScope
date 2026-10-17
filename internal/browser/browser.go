@@ -78,19 +78,19 @@ func Find(override string) (Found, error) {
 	return Found{}, errors.New("browser: neither Chrome nor Edge was found")
 }
 
-func LaunchApp(b Found, appURL, profileDir string) (*exec.Cmd, error) {
+func LaunchApp(b Found, appURL, profileDir string, win *Window) (*exec.Cmd, error) {
 	if err := os.MkdirAll(profileDir, 0o755); err != nil {
 		return nil, err
 	}
-	cmd := exec.Command(b.Path,
-		"--app="+appURL,
-		"--user-data-dir="+profileDir,
+	args := []string{
+		"--app=" + appURL,
+		"--user-data-dir=" + profileDir,
 		"--no-first-run",
 		"--no-default-browser-check",
 		"--disable-features=Translate,TranslateUI",
 		"--disable-translate",
-		"--window-size=1280,880",
-	)
+	}
+	cmd := exec.Command(b.Path, append(args, windowArgs(win)...)...)
 	if err := cmd.Start(); err != nil {
 		return nil, err
 	}

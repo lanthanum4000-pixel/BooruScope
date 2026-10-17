@@ -62,7 +62,7 @@ func Run(opt Options) error {
 		if b, err := browser.Find(opt.BrowserPath); err == nil {
 			profile, _ := os.MkdirTemp("", "booruscope-setup-")
 			t0 := time.Now()
-			cmd, err := browser.LaunchApp(b, url, profile)
+			cmd, err := browser.LaunchApp(b, url, profile, nil)
 			if err != nil {
 				opt.Logf("window: %v", err)
 				life.NoBrowserProcess()

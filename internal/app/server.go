@@ -13,6 +13,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/lanthanum4000-pixel/BooruScope/internal/browser"
 	"github.com/lanthanum4000-pixel/BooruScope/internal/encoder"
 	"github.com/lanthanum4000-pixel/BooruScope/internal/fetch"
 	"github.com/lanthanum4000-pixel/BooruScope/internal/index"
@@ -42,6 +43,7 @@ type Config struct {
 	Thumbs       *fetch.Thumbs
 	Web          fs.FS
 	SettingsPath string
+	WindowPath   string
 	OpenURL      func(string) error
 	FetchImage   func(ctx context.Context, u *url.URL, referer string) ([]byte, string, error)
 	Logf         func(string, ...any)
@@ -55,6 +57,7 @@ type Server struct {
 	guard *localweb.Guard
 	life  *localweb.Lifetime
 
+	winMu      sync.Mutex
 	mu         sync.Mutex
 	settings   Settings
 	queries    []storedQuery
@@ -123,6 +126,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /api/thumb/{row}", s.handleThumb)
 	mux.HandleFunc("POST /api/open", s.handleOpen)
 	mux.HandleFunc("POST /api/encoder/restart", s.handleRestart)
+	mux.HandleFunc("POST /api/window", s.handleWindow)
 	s.life.Register(mux)
 	return s.guard.Wrap(mux)
 }
@@ -177,6 +181,34 @@ func (s *Server) handleSettings(w http.ResponseWriter, r *http.Request) {
 		s.touch()
 	}
 	writeJSON(w, http.StatusOK, in)
+}
+
+func (s *Server) handleWindow(w http.ResponseWriter, r *http.Request) {
+	var in browser.Window
+	if err := json.NewDecoder(io.LimitReader(r.Body, 1<<12)).Decode(&in); err != nil {
+		writeErr(w, http.StatusBadRequest, "bad_request", err.Error())
+		return
+	}
+	if s.cfg.WindowPath == "" {
+		w.WriteHeader(http.StatusNoContent)
+		return
+	}
+	s.winMu.Lock()
+	defer s.winMu.Unlock()
+	prev, ok := browser.LoadWindow(s.cfg.WindowPath)
+	if in.Max && ok {
+		in = browser.Window{X: prev.X, Y: prev.Y, W: prev.W, H: prev.H, Max: true}
+	}
+	if !in.Valid() {
+		writeErr(w, http.StatusBadRequest, "bad_request", "window geometry out of range")
+		return
+	}
+	if !ok || in != prev {
+		if err := browser.SaveWindow(s.cfg.WindowPath, in); err != nil {
+			s.cfg.Logf("window: %v", err)
+		}
+	}
+	w.WriteHeader(http.StatusNoContent)
 }
 
 type resultItem struct {

@@ -67,7 +67,7 @@ go run ./cmd/booruscope -home ./run
 
 | Flag | Default | Meaning |
 |---|---|---|
-| `-home` | folder of the executable | settings, Python runtime, browser profile |
+| `-home` | folder of the executable | settings, Python runtime, browser profile, last window position |
 | `-data` | `<home>/data` | data files |
 | `-port` | random | local port |
 | `-no-window` | off | only print the local URL |
@@ -84,7 +84,8 @@ Logs go to `<home>/runtime/booruscope.log` (installer: `booruscope-setup.log` in
 ## Using it
 
 - Drop an image file from disk, or drag an image out of a browser window. BooruScope downloads linked images itself, sending the image's own origin as `Referer`.
-- While CLIP is still loading (first start, or after it was unloaded when idle), a slowly drifting wall of recently seen thumbnails plays behind the results. Tick **Background wall** to keep it playing all the time; it refreshes with new thumbnails after each search.
+- While CLIP is still loading (first start, or after it was unloaded when idle), a slowly drifting wall plays behind the results, picked at random from the last 500 thumbnails you have seen. Tick **Background wall** to keep it playing all the time; once a search returns, the tiles scrolling into view switch to that page's results (also when you go back or forward).
+- The window opens where you last left it, at the same size (or maximized). If that spot is no longer on any screen, it opens at its last size in the default position.
 - The query image stays pinned in the top-left 2×2 cells with a 16×16 / 4×4 grid over it; results flow around it.
 - The magnifier on the query image opens Google Lens for it in your default browser. Images that came from a link are passed by URL; local files are uploaded to Lens from a small local page.
 - Right-click a result card and choose **Search with this image** to search again from that post's preview. Other right-click menus are disabled.
