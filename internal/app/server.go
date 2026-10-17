@@ -1,15 +1,11 @@
 package app
 
 import (
-	"bytes"
 	"context"
-	"crypto/rand"
-	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"io"
 	"io/fs"
-	"net"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -20,13 +16,13 @@ import (
 	"github.com/lanthanum4000-pixel/BooruScope/internal/encoder"
 	"github.com/lanthanum4000-pixel/BooruScope/internal/fetch"
 	"github.com/lanthanum4000-pixel/BooruScope/internal/index"
+	"github.com/lanthanum4000-pixel/BooruScope/internal/localweb"
 )
 
 const (
 	ResultCount  = 60
 	queryKeep    = 8
 	PostURLTpl   = "https://gelbooru.com/index.php?page=post&s=view&id="
-	tokenHeader  = "X-BooruScope-Token"
 	encodeLimit  = 3 * time.Minute
 	fetchTimeout = 45 * time.Second
 )
@@ -50,8 +46,7 @@ type Config struct {
 
 type Server struct {
 	cfg   Config
-	token string
-	addr  string
+	guard *localweb.Guard
 
 	mu       sync.Mutex
 	settings Settings
@@ -65,11 +60,6 @@ type storedQuery struct {
 	ct   string
 }
 
-type apiError struct {
-	Error  string `json:"error"`
-	Detail string `json:"detail,omitempty"`
-}
-
 func New(cfg Config) *Server {
 	if cfg.FetchImage == nil {
 		cfg.FetchImage = fetch.Image
@@ -77,12 +67,10 @@ func New(cfg Config) *Server {
 	if cfg.Logf == nil {
 		cfg.Logf = func(string, ...any) {}
 	}
-	b := make([]byte, 24)
-	rand.Read(b)
-	return &Server{cfg: cfg, token: hex.EncodeToString(b), settings: loadSettings(cfg.SettingsPath)}
+	return &Server{cfg: cfg, guard: localweb.NewGuard(), settings: loadSettings(cfg.SettingsPath)}
 }
 
-func (s *Server) Token() string { return s.token }
+func (s *Server) Token() string { return s.guard.Token() }
 
 func (s *Server) Settings() Settings {
 	s.mu.Lock()
@@ -90,7 +78,7 @@ func (s *Server) Settings() Settings {
 	return s.settings
 }
 
-func (s *Server) SetAddr(addr string) { s.addr = addr }
+func (s *Server) SetAddr(addr string) { s.guard.SetAddr(addr) }
 
 func (s *Server) Handler() http.Handler {
 	mux := http.NewServeMux()
@@ -104,68 +92,16 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /api/thumb/{row}", s.handleThumb)
 	mux.HandleFunc("POST /api/open", s.handleOpen)
 	mux.HandleFunc("POST /api/encoder/restart", s.handleRestart)
-	return s.guard(mux)
+	return s.guard.Wrap(mux)
 }
 
-func (s *Server) hostAllowed(host string) bool {
-	h, port, err := net.SplitHostPort(host)
-	if err != nil {
-		return false
-	}
-	if h != "127.0.0.1" && h != "localhost" {
-		return false
-	}
-	if s.addr == "" {
-		return true
-	}
-	_, want, _ := net.SplitHostPort(s.addr)
-	return port == want
-}
-
-func (s *Server) guard(next http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if !s.hostAllowed(r.Host) {
-			http.Error(w, "forbidden", http.StatusForbidden)
-			return
-		}
-		if strings.HasPrefix(r.URL.Path, "/api/") {
-			tok := r.Header.Get(tokenHeader)
-			if tok == "" {
-				tok = r.URL.Query().Get("t")
-			}
-			if tok != s.token {
-				writeErr(w, http.StatusForbidden, "forbidden", "")
-				return
-			}
-		}
-		w.Header().Set("X-Content-Type-Options", "nosniff")
-		w.Header().Set("Referrer-Policy", "no-referrer")
-		next.ServeHTTP(w, r)
-	})
-}
-
-func writeJSON(w http.ResponseWriter, code int, v any) {
-	w.Header().Set("Content-Type", "application/json; charset=utf-8")
-	w.Header().Set("Cache-Control", "no-store")
-	w.WriteHeader(code)
-	json.NewEncoder(w).Encode(v)
-}
-
-func writeErr(w http.ResponseWriter, code int, kind, detail string) {
-	writeJSON(w, code, apiError{Error: kind, Detail: detail})
-}
+var (
+	writeJSON = localweb.WriteJSON
+	writeErr  = localweb.WriteErr
+)
 
 func (s *Server) handleIndex(w http.ResponseWriter, r *http.Request) {
-	b, err := fs.ReadFile(s.cfg.Web, "index.html")
-	if err != nil {
-		http.Error(w, "missing index.html", http.StatusInternalServerError)
-		return
-	}
-	b = bytes.Replace(b, []byte("{{TOKEN}}"), []byte(s.token), 1)
-	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	w.Header().Set("Cache-Control", "no-store")
-	w.Header().Set("Content-Security-Policy", "default-src 'self'; img-src 'self' blob: data:; style-src 'self'; script-src 'self'; connect-src 'self'")
-	w.Write(b)
+	s.guard.ServePage(w, s.cfg.Web, "index.html")
 }
 
 type stateResp struct {

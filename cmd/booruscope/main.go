@@ -5,6 +5,7 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"io"
 	"log"
 	"net"
 	"net/http"
@@ -19,6 +20,7 @@ import (
 	"github.com/lanthanum4000-pixel/BooruScope/internal/browser"
 	"github.com/lanthanum4000-pixel/BooruScope/internal/encoder"
 	"github.com/lanthanum4000-pixel/BooruScope/internal/fetch"
+	"github.com/lanthanum4000-pixel/BooruScope/internal/setup"
 	"github.com/lanthanum4000-pixel/BooruScope/web"
 )
 
@@ -31,12 +33,20 @@ func defaultHome() string {
 		return "."
 	}
 	dir := filepath.Dir(exe)
-	if strings.HasPrefix(dir, os.TempDir()) {
+	if strings.Contains(dir, "go-build") {
 		if wd, err := os.Getwd(); err == nil {
 			return wd
 		}
 	}
 	return dir
+}
+
+func isSetupName() bool {
+	exe, err := os.Executable()
+	if err != nil {
+		return false
+	}
+	return strings.Contains(strings.ToLower(filepath.Base(exe)), "setup")
 }
 
 func main() {
@@ -49,10 +59,27 @@ func main() {
 	torchIndex := flag.String("torch-index", os.Getenv("BOORUSCOPE_TORCH_INDEX"), "pip index for torch, or \"pypi\"")
 	model := flag.String("model", encoder.DefaultModel, "CLIP model id or local folder")
 	device := flag.String("device", "auto", "encoder device: auto, cpu, cuda, cuda:N")
+	setupMode := flag.Bool("setup", isSetupName(), "run the installer")
+	source := flag.String("source", setup.DefaultSource, "base URL of the data files for the installer")
 	flag.Parse()
 
 	logger := log.New(os.Stderr, "", log.LstdFlags)
 	logf := logger.Printf
+
+	if *setupMode {
+		if f, err := os.Create(filepath.Join(os.TempDir(), "booruscope-setup.log")); err == nil {
+			defer f.Close()
+			logger.SetOutput(io.MultiWriter(f, os.Stderr))
+		}
+		src := *source
+		if !strings.HasSuffix(src, "/") {
+			src += "/"
+		}
+		if err := setup.Run(setup.Options{Web: web.FS, Source: src, Port: *port, NoWindow: *noWindow, BrowserPath: *browserPath, Logf: logf}); err != nil {
+			logger.Fatal(err)
+		}
+		return
+	}
 
 	absHome, err := filepath.Abs(*home)
 	if err != nil {
@@ -66,6 +93,10 @@ func main() {
 		if err := os.MkdirAll(d, 0o755); err != nil {
 			logger.Fatal(err)
 		}
+	}
+	if f, err := os.Create(filepath.Join(runtimeDir, "booruscope.log")); err == nil {
+		defer f.Close()
+		logger.SetOutput(io.MultiWriter(f, os.Stderr))
 	}
 	if os.Getenv("HF_HOME") == "" {
 		os.Setenv("HF_HOME", filepath.Join(runtimeDir, "huggingface"))

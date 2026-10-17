@@ -16,6 +16,8 @@ import (
 	"path/filepath"
 	"sync"
 	"time"
+
+	"github.com/lanthanum4000-pixel/BooruScope/internal/proc"
 )
 
 //go:embed py/encode.py py/requirements.txt
@@ -181,7 +183,7 @@ func (e *Encoder) boot(ctx context.Context) error {
 	if err := os.WriteFile(scriptPath, script, 0o644); err != nil {
 		return err
 	}
-	cmd := exec.CommandContext(ctx, e.venvPython(), "-u", scriptPath, "--model", e.opt.Model, "--device", e.opt.Device)
+	cmd := proc.Hide(exec.CommandContext(ctx, e.venvPython(), "-u", scriptPath, "--model", e.opt.Model, "--device", e.opt.Device))
 	cmd.Dir = scriptDir
 	cmd.Env = append(os.Environ(), "PYTHONIOENCODING=utf-8", "PYTHONUNBUFFERED=1", "PYTHONNOUSERSITE=1", "HF_HUB_DISABLE_TELEMETRY=1")
 	stdin, err := cmd.StdinPipe()

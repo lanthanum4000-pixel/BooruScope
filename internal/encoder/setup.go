@@ -13,6 +13,8 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
+
+	"github.com/lanthanum4000-pixel/BooruScope/internal/proc"
 )
 
 const (
@@ -75,7 +77,7 @@ func (e *Encoder) findPython(ctx context.Context) ([]string, error) {
 			continue
 		}
 		args := append(append([]string{}, c[1:]...), "-c", probe)
-		cmd := exec.CommandContext(ctx, c[0], args...)
+		cmd := proc.Hide(exec.CommandContext(ctx, c[0], args...))
 		if err := cmd.Run(); err == nil {
 			return c, nil
 		}
@@ -137,7 +139,7 @@ func (e *Encoder) ensureVenv(ctx context.Context) error {
 }
 
 func (e *Encoder) runLogged(ctx context.Context, name string, args ...string) error {
-	cmd := exec.CommandContext(ctx, name, args...)
+	cmd := proc.Hide(exec.CommandContext(ctx, name, args...))
 	cmd.Env = append(os.Environ(), "PYTHONIOENCODING=utf-8", "PIP_NO_INPUT=1")
 	pr, pw := io.Pipe()
 	cmd.Stdout = pw

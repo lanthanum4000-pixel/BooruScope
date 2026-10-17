@@ -1,0 +1,88 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="bs-token" content="{{TOKEN}}">
+<title>BooruScope Setup</title>
+<link rel="icon" href="/assets/icon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="/assets/app.css">
+<link rel="stylesheet" href="/assets/setup.css">
+</head>
+<body class="setup">
+<header class="bar">
+  <div class="brand">
+    <img class="logo" src="/assets/icon.svg" alt="">
+    <span data-i18n="setup.title"></span>
+  </div>
+  <div class="seg" id="lang" role="group">
+    <button type="button" data-lang="zh">中文</button>
+    <button type="button" data-lang="en">EN</button>
+  </div>
+</header>
+<main class="setup-main">
+  <section class="panel" id="formView">
+    <h2 data-i18n="setup.where"></h2>
+    <div class="row">
+      <input type="text" id="dir" spellcheck="false" autocomplete="off">
+      <button type="button" class="btn" id="browse" data-i18n="setup.browse"></button>
+    </div>
+    <p class="hint" id="dirInfo"></p>
+    <p class="warn" id="dirWarn" hidden></p>
+
+    <h2 data-i18n="setup.data"></h2>
+    <div id="manifestBox" class="hint"></div>
+    <div class="packs" id="packs">
+      <label class="pack" id="packFull">
+        <input type="radio" name="pack" value="full">
+        <span class="pack-title" data-i18n="setup.full"></span>
+        <span class="pack-desc" id="fullDesc"></span>
+      </label>
+      <label class="pack" id="packTrial">
+        <input type="radio" name="pack" value="trial">
+        <span class="pack-title" data-i18n="setup.trial"></span>
+        <span class="pack-desc" id="trialDesc"></span>
+      </label>
+    </div>
+    <div class="fullopts" id="fullOpts">
+      <h3 data-i18n="setup.index"></h3>
+      <div id="variants"></div>
+      <label class="opt">
+        <input type="checkbox" id="rerank">
+        <span><b data-i18n="setup.rerank"></b><br><small id="rerankDesc"></small></span>
+      </label>
+    </div>
+
+    <div id="optionsBox">
+      <h2 data-i18n="setup.options"></h2>
+      <label class="opt"><input type="checkbox" id="shortcut" checked><span data-i18n="setup.shortcut"></span></label>
+    </div>
+
+    <div class="footer">
+      <span id="total"></span>
+      <button type="button" class="btn primary" id="install" data-i18n="setup.install"></button>
+    </div>
+  </section>
+
+  <section class="panel" id="progressView" hidden>
+    <h2 id="progTitle" data-i18n="setup.installing"></h2>
+    <p class="hint" id="progStep"></p>
+    <div id="fileList"></div>
+    <p class="hint" id="progSpeed"></p>
+    <div class="footer"><span></span><button type="button" class="btn" id="cancel" data-i18n="setup.cancel"></button></div>
+  </section>
+
+  <section class="panel" id="doneView" hidden>
+    <h2 id="doneTitle"></h2>
+    <p id="doneDesc"></p>
+    <div class="footer" id="doneButtons">
+      <button type="button" class="btn" id="close" data-i18n="setup.close"></button>
+      <button type="button" class="btn primary" id="launch" data-i18n="setup.launch"></button>
+      <button type="button" class="btn primary" id="back" data-i18n="setup.back"></button>
+    </div>
+  </section>
+</main>
+<script src="/assets/i18n.js"></script>
+<script src="/assets/setup.js"></script>
+</body>
+</html>

@@ -21,6 +21,7 @@ import (
 
 	"github.com/lanthanum4000-pixel/BooruScope/internal/encoder"
 	"github.com/lanthanum4000-pixel/BooruScope/internal/fetch"
+	"github.com/lanthanum4000-pixel/BooruScope/internal/localweb"
 )
 
 var packDir = filepath.Join("..", "..", "testdata", "testpack")
@@ -131,7 +132,7 @@ func (hs *harness) do(method, path string, body io.Reader, auth bool) *httptest.
 	req := httptest.NewRequest(method, path, body)
 	req.Host = "127.0.0.1:5555"
 	if auth {
-		req.Header.Set(tokenHeader, hs.srv.Token())
+		req.Header.Set(localweb.TokenHeader, hs.srv.Token())
 	}
 	rec := httptest.NewRecorder()
 	hs.h.ServeHTTP(rec, req)
@@ -145,7 +146,7 @@ func TestRejectsMissingTokenAndForeignHost(t *testing.T) {
 	}
 	req := httptest.NewRequest("GET", "/api/state", nil)
 	req.Host = "evil.example:5555"
-	req.Header.Set(tokenHeader, hs.srv.Token())
+	req.Header.Set(localweb.TokenHeader, hs.srv.Token())
 	rec := httptest.NewRecorder()
 	hs.h.ServeHTTP(rec, req)
 	if rec.Code != http.StatusForbidden {

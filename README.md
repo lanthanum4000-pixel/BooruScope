@@ -29,7 +29,7 @@ Go app ── local HTTP on 127.0.0.1 ── app window (Chrome or Edge in app m
 
 ## Data files
 
-The data files are published as a dataset on Hugging Face. Download `posts.bin`, one index file and, if you want reranking, `rerank_int8.bin`, then put them into `<home>/data` (or point `-data` at another folder):
+The data files are published at [huggingface.co/Lanthanum4000/BooruScope](https://huggingface.co/Lanthanum4000/BooruScope). The installer downloads them for you; to install by hand, put `posts.bin`, one index file and, if you want reranking, `rerank_int8.bin` into `<home>/data` (or point `-data` at another folder):
 
 | File | Needed | Size (9.18 M posts) | Content |
 |---|---|---|---|
@@ -49,9 +49,19 @@ Measured quality on 50 random Gelbooru queries (ground truth: exact cosine ranki
 
 These numbers use query vectors computed on the machine that built the index. Vectors computed on your machine (different decoder, CPU instead of GPU) will differ slightly; how much that costs in recall has not been measured yet.
 
+## Installing
+
+Run `BooruScope-Setup` (`BooruScope-Setup.exe` on Windows). It opens a small window where you choose:
+
+- **Install location**: any folder you can write to. Default: `%LOCALAPPDATA%\Programs\BooruScope` on Windows, `~/Applications/BooruScope` on macOS, `~/.local/share/BooruScope` on Linux. Everything BooruScope stores, including the Python environment and the CLIP weights, stays in this folder.
+- **Data**: the full index (pick M64, M96 or M128, and optionally the int8 rerank file) or the 1,000-post trial pack.
+- **Shortcuts** (Windows): desktop and Start menu.
+
+Downloads resume after an interruption and every file is checked against the SHA-256 in the published `manifest.json`. Running the installer again on the same folder updates the program, keeps verified data files, and only downloads what changed. The installer is the BooruScope program itself: any copy whose file name contains `setup`, or that is started with `-setup`, runs as the installer.
+
 ## Running
 
-Download a release, unzip it anywhere with enough free space, put the data files into `data/`, and start `booruscope` (`booruscope.exe` on Windows).
+Start `booruscope` (`booruscope.exe`) in the install folder, or use the shortcut.
 
 From source (Go 1.24+):
 
@@ -70,6 +80,10 @@ go run ./cmd/booruscope -home ./run
 | `-torch-index` | auto | pip index for PyTorch (`pypi` forces PyPI) |
 | `-model` | `openai/clip-vit-large-patch14` | Hugging Face id or local folder |
 | `-device` | `auto` | `cpu`, `cuda`, `cuda:1`, … |
+| `-setup` | auto | run the installer |
+| `-source` | `https://huggingface.co/Lanthanum4000/BooruScope/resolve/main/` | where the installer downloads data from |
+
+Logs go to `<home>/runtime/booruscope.log` (installer: `booruscope-setup.log` in the temp folder).
 
 ## Using it
 
@@ -95,6 +109,8 @@ The preprocessing chain must match the one used to build the index:
 5. `CLIPVisionModelWithProjection` image embedding (fp16 on CUDA, fp32 otherwise), L2-normalized.
 
 ## Development
+
+Publishing data files and building releases is described in [`docs/PUBLISHING.md`](docs/PUBLISHING.md).
 
 ```
 go test ./...

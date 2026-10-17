@@ -89,20 +89,46 @@ func readFloats(r io.Reader, n int) ([]float32, error) {
 	return out, nil
 }
 
-func LoadPQ(path string) (*PQ, error) {
+type PQHeader struct {
+	M   int
+	Dim int
+	N   int
+}
+
+func readPQHeader(path string) (*os.File, *bufio.Reader, PQHeader, error) {
 	f, r, w, size, err := openChecked(path, magicPQ, 4)
+	if err != nil {
+		return nil, nil, PQHeader{}, err
+	}
+	m, dim, n, k := int(w[0]), int(w[1]), int(w[2]), int(w[3])
+	if m <= 0 || dim <= 0 || dim%m != 0 || k != codebookK {
+		f.Close()
+		return nil, nil, PQHeader{}, formatErr(path, "m=%d dim=%d k=%d", m, dim, k)
+	}
+	want := int64(len(magicPQ)+16) + 4*int64(dim) + 4*int64(dim)*int64(dim) + 4*int64(m)*int64(k)*int64(dim/m) + int64(n)*int64(m)
+	if size != want {
+		f.Close()
+		return nil, nil, PQHeader{}, formatErr(path, "size %d, want %d", size, want)
+	}
+	return f, r, PQHeader{M: m, Dim: dim, N: n}, nil
+}
+
+func LoadPQHeader(path string) (PQHeader, error) {
+	f, _, h, err := readPQHeader(path)
+	if err != nil {
+		return PQHeader{}, err
+	}
+	f.Close()
+	return h, nil
+}
+
+func LoadPQ(path string) (*PQ, error) {
+	f, r, h, err := readPQHeader(path)
 	if err != nil {
 		return nil, err
 	}
 	defer f.Close()
-	m, dim, n, k := int(w[0]), int(w[1]), int(w[2]), int(w[3])
-	if m <= 0 || dim <= 0 || dim%m != 0 || k != codebookK {
-		return nil, formatErr(path, "m=%d dim=%d k=%d", m, dim, k)
-	}
-	want := int64(len(magicPQ)+16) + 4*int64(dim) + 4*int64(dim)*int64(dim) + 4*int64(m)*int64(k)*int64(dim/m) + int64(n)*int64(m)
-	if size != want {
-		return nil, formatErr(path, "size %d, want %d", size, want)
-	}
+	m, dim, n, k := h.M, h.Dim, h.N, codebookK
 	p := &PQ{M: m, Dim: dim, N: n}
 	if p.Mean, err = readFloats(r, dim); err != nil {
 		return nil, formatErr(path, "mean: %v", err)
