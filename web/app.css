@@ -32,6 +32,7 @@ body {
 .bar {
   display: flex;
   align-items: center;
+  justify-content: space-between;
   gap: 16px;
   padding: 10px 16px;
   background: var(--panel);
@@ -49,21 +50,36 @@ body {
 
 .logo { width: 26px; height: 26px; }
 
-.status {
+.strip {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 10px;
+  padding: 6px 16px;
   font-size: 12px;
   color: var(--ink-2);
-  min-width: 0;
-  flex: 1;
+  border-bottom: 1px solid var(--line);
+  background: rgba(255, 255, 255, 0.6);
+  min-height: 36px;
+  flex-wrap: wrap;
 }
 
-.status span:not(.dot):not(.sep) {
+.pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 10px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--panel);
+  max-width: 560px;
+  min-width: 0;
+}
+
+.ptext {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  max-width: 340px;
+  min-width: 0;
 }
 
 .dot {
@@ -77,8 +93,6 @@ body {
 .dot.busy { background: var(--busy); animation: pulse 1.2s ease-in-out infinite; }
 .dot.err { background: var(--err); }
 
-.sep { width: 1px; height: 14px; background: var(--line); margin: 0 6px; }
-
 .link {
   border: 0;
   background: none;
@@ -87,6 +101,8 @@ body {
   font-size: 12px;
   padding: 0 4px;
   text-decoration: underline;
+  white-space: nowrap;
+  flex: none;
 }
 
 .controls {
@@ -131,10 +147,11 @@ body {
 .seg button.active { background: var(--accent-soft); color: var(--high); font-weight: 700; }
 
 .msgline {
-  min-height: 26px;
-  padding: 5px 16px;
-  font-size: 12px;
-  color: var(--ink-2);
+  margin-left: auto;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
 }
 .msgline.error { color: var(--err); }
 
@@ -143,7 +160,7 @@ body {
   overflow-y: auto;
   overflow-x: hidden;
   position: relative;
-  padding: 0 4px 16px;
+  padding: 8px 4px 16px;
 }
 
 .spacer { position: relative; width: 100%; }
@@ -176,13 +193,9 @@ body {
   word-break: break-all;
 }
 .empty-art {
-  width: 120px;
-  height: 90px;
-  border: 2px dashed var(--ink-3);
-  border-radius: 14px;
-  background:
-    linear-gradient(135deg, transparent 46%, var(--ink-3) 47%, var(--ink-3) 53%, transparent 54%) center / 40px 40px no-repeat;
-  opacity: 0.6;
+  width: 132px;
+  height: 104px;
+  opacity: 0.85;
 }
 
 .card {

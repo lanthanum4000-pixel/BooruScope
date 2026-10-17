@@ -14,12 +14,6 @@
     <img class="logo" src="/assets/icon.svg" alt="">
     <span data-i18n="app.title"></span>
   </div>
-  <div class="status">
-    <span class="dot" id="encDot"></span><span id="encText"></span>
-    <button type="button" class="link" id="encRetry" hidden data-i18n="enc.retry"></button>
-    <span class="sep"></span>
-    <span class="dot" id="libDot"></span><span id="libText"></span>
-  </div>
   <div class="controls">
     <label class="ctl">
       <span data-i18n="rowCap.label"></span>
@@ -44,11 +38,15 @@
     </div>
   </div>
 </header>
-<div class="msgline" id="msgline"></div>
+<div class="strip">
+  <span class="pill"><span class="dot" id="encDot"></span><span class="ptext" id="encText"></span><button type="button" class="link" id="encRetry" hidden data-i18n="enc.retry"></button></span>
+  <span class="pill"><span class="dot" id="libDot"></span><span class="ptext" id="libText"></span></span>
+  <span class="msgline" id="msgline"></span>
+</div>
 <main class="results" id="results">
   <div class="spacer" id="spacer"></div>
   <div class="empty" id="empty">
-    <div class="empty-art"></div>
+    <img class="empty-art" src="/assets/drop.svg" alt="">
     <h1 id="emptyTitle" data-i18n="drop.title"></h1>
     <p id="emptyHint" data-i18n="drop.hint"></p>
     <p class="missing" id="missingHelp" hidden><span data-i18n="lib.missingHelp"></span><code id="missingDir"></code></p>
