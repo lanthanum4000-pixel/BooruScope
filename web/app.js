@@ -28,7 +28,10 @@
   let settings = { lang: "", rowCap: 4, variant: 0, rerank: true, idleUnload: false, idleMinutes: 10, offline: true };
   let idleDeadline = 0;
   let fx = null;
-  let freshCards = false;
+  let revealed = new Set();
+  let scrollDir = "down";
+  let lastScrollTop = 0;
+  const RISE = { colStep: 0.05, rowStep: 0.08, staggerRows: 4, nearTop: 100 };
   let freshQuery = false;
   const DRIFT = { keep: 30, perColumn: 9, minSources: 12, durations: [42, 49, 45, 53, 46], storeKey: "booruscope.driftRows", fadeMs: 1300 };
   let driftRows = loadDriftRows();
@@ -281,8 +284,8 @@
     card.dataset.i = String(i);
     card.innerHTML = '<div class="thumb"><img alt="" draggable="false"><span class="nothumb"></span></div><div class="name"></div><div class="estatus"></div>';
     const img = card.querySelector("img");
-    img.addEventListener("load", () => { card.classList.add("loaded"); rememberDriftRow(r.row); });
-    img.addEventListener("error", () => card.classList.add("failed"));
+    img.addEventListener("load", () => { card.classList.add("loaded"); rememberDriftRow(r.row); maybeReveal(card); });
+    img.addEventListener("error", () => { card.classList.add("failed"); maybeReveal(card); });
     img.src = withToken("/api/thumb/" + r.row);
     card.querySelector(".name").textContent = "#" + r.id;
     fillCardText(card, r);
@@ -648,10 +651,12 @@
         let card = cards.get(i);
         if (!card) {
           card = makeCard(i);
-          if (freshCards) card.classList.add("card-in");
+          if (!revealed.has(i)) card.classList.add("pending");
           cards.set(i, card);
           el.spacer.appendChild(card);
         }
+        card._col = c;
+        card._row = r;
         card.style.left = c * m.cardW + "px";
         card.style.top = r * m.cardH + "px";
         card.style.width = m.cardW + "px";
@@ -663,8 +668,8 @@
     }
     for (const [i, card] of cards) {
       if (!keep.has(i)) { card.remove(); cards.delete(i); }
+      else maybeReveal(card);
     }
-    freshCards = false;
     layoutGrid();
     if (searching) fxStart();
   }
@@ -679,6 +684,31 @@
     for (const card of cards.values()) card.remove();
     cards = new Map();
     results = [];
+    revealed = new Set();
+    scrollDir = "down";
+    lastScrollTop = 0;
+  }
+
+  function maybeReveal(card) {
+    const i = parseInt(card.dataset.i, 10);
+    if (revealed.has(i)) return;
+    if (!card.classList.contains("loaded") && !card.classList.contains("failed")) return;
+    const top = el.results.scrollTop, bot = top + el.results.clientHeight;
+    const y = parseFloat(card.style.top) || 0, h = parseFloat(card.style.height) || 0;
+    if (y >= bot || y + h <= top) return;
+    revealed.add(i);
+    card.classList.remove("pending");
+    if (scrollDir === "up") return;
+    const row = card._row || 0;
+    const delay = (card._col || 0) * RISE.colStep + (row < RISE.staggerRows && top <= RISE.nearTop ? row * RISE.rowStep : 0);
+    card.style.animationDelay = delay.toFixed(2) + "s";
+    card.classList.add("rise");
+    card.addEventListener("animationend", function done(e) {
+      if (e.animationName !== "card-rise") return;
+      card.classList.remove("rise");
+      card.style.animationDelay = "";
+      card.removeEventListener("animationend", done);
+    });
   }
 
   function setQuery(src) {
@@ -706,7 +736,6 @@
       if (!query.src) query.src = withToken("/api/query/" + res.query);
       query.id = res.query;
       results = res.results || [];
-      freshCards = true;
       lastSearch = res;
       setMessage({ done: res });
     } catch (e) {
@@ -870,7 +899,12 @@
         .then(() => showToast(t("open.done")))
         .catch((err) => showToast(errText(err)));
     });
-    el.results.addEventListener("scroll", queueRender, { passive: true });
+    el.results.addEventListener("scroll", () => {
+      const st = el.results.scrollTop;
+      if (st !== lastScrollTop) scrollDir = st < lastScrollTop ? "up" : "down";
+      lastScrollTop = st;
+      queueRender();
+    }, { passive: true });
     new ResizeObserver(queueRender).observe(el.results);
   }
 

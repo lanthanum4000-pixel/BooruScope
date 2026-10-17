@@ -443,8 +443,14 @@ body {
   color: var(--high);
 }
 
-.qtile.pq-in, .card.card-in { animation: card-in 0.44s ease; }
+.qtile.pq-in { animation: card-in 0.44s ease; }
 @keyframes card-in { from { opacity: 0; transform: scale(0.96); } to { opacity: 1; transform: none; } }
+.card.pending { opacity: 0; }
+.card.rise { animation: card-rise 0.85s cubic-bezier(0.25, 1, 0.25, 1) both; }
+@keyframes card-rise {
+  from { opacity: 0; transform: translateY(200px); filter: blur(12px); }
+  to { opacity: 1; transform: none; filter: none; }
+}
 
 .qfx { position: absolute; z-index: 1; pointer-events: none; overflow: hidden; transition: opacity 1.2s ease; }
 .qfx.end { opacity: 0; }
@@ -491,7 +497,7 @@ body {
 .qfx.end .qfx-vign { opacity: 0; }
 
 @media (prefers-reduced-motion: reduce) {
-  .qfx, .qtile.pq-in, .card.card-in { animation: none; }
+  .qfx, .qtile.pq-in, .card.rise { animation: none; }
 }
 
 .drop-overlay {
