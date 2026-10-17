@@ -87,7 +87,8 @@ func LaunchApp(b Found, appURL, profileDir string) (*exec.Cmd, error) {
 		"--user-data-dir="+profileDir,
 		"--no-first-run",
 		"--no-default-browser-check",
-		"--disable-features=Translate",
+		"--disable-features=Translate,TranslateUI",
+		"--disable-translate",
 		"--window-size=1280,880",
 	)
 	if err := cmd.Start(); err != nil {
