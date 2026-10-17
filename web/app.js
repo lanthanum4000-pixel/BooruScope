@@ -10,6 +10,7 @@
     rowCap: $("rowCap"), rowCapVal: $("rowCapVal"),
     idleUnload: $("idleUnload"), idleMinutes: $("idleMinutes"), idleCountdown: $("idleCountdown"), idleBox: $("idleBox"),
     offline: $("offline"), offlineBox: $("offlineBox"),
+    alwaysDrift: $("alwaysDrift"), alwaysDriftBox: $("alwaysDriftBox"),
     variant: $("variant"), rerank: $("rerank"), rerankText: $("rerankText"), lang: $("lang"),
     encDot: $("encDot"), encText: $("encText"), encRetry: $("encRetry"),
     libDot: $("libDot"), libText: $("libText"), msgline: $("msgline"),
@@ -25,7 +26,7 @@
   const Q_COLS = 2;
   const BUFFER_ROWS = 2;
 
-  let settings = { lang: "", rowCap: 4, variant: 0, rerank: true, idleUnload: false, idleMinutes: 10, offline: true };
+  let settings = { lang: "", rowCap: 4, variant: 0, rerank: true, idleUnload: false, idleMinutes: 10, offline: true, alwaysDrift: false };
   let idleDeadline = 0;
   let fx = null;
   let revealed = new Set();
@@ -35,7 +36,7 @@
   let freshQuery = false;
   const DRIFT = { keep: 30, perColumn: 9, minSources: 12, durations: [42, 49, 45, 53, 46], storeKey: "booruscope.driftRows", fadeMs: 1300 };
   let driftRows = loadDriftRows();
-  let driftSignature = "";
+  let driftBuiltFrom = null;
   let driftOn = false;
   let driftStopTimer = 0;
   const FX = { aber: 2, cols: 6, breakEvery: 250, liftMs: 980, liftShift: 3, liftScale: 1.03, glitchEvery: 3200, glitchFrac: 0.08, glitchShift: 14, grain: 0.02, wobble: 0.5, wobbleHz: 1, minMs: 900, fadeMs: 1300 };
@@ -136,6 +137,8 @@
     el.idleMinutes.value = String(settings.idleMinutes || 10);
     el.idleMinutes.disabled = !settings.idleUnload;
     el.offline.checked = !!settings.offline;
+    el.alwaysDrift.checked = !!settings.alwaysDrift;
+    el.alwaysDriftBox.title = t("drift.title");
     el.idleBox.title = t("idle.title");
     el.offlineBox.title = t("offline.title");
     tickCountdown();
@@ -422,10 +425,8 @@
 
   function buildDrift() {
     const rows = driftSources();
-    const signature = rows.join(",");
     if (!rows.length) return false;
-    if (signature === driftSignature) return true;
-    driftSignature = signature;
+    driftBuiltFrom = driftRows.join(",");
     const cols = Math.max(5, Math.min(10, Math.round(el.drift.parentElement.clientWidth / 150)));
     el.driftScene.style.setProperty("--dw-cols", String(cols));
     const frag = document.createDocumentFragment();
@@ -455,10 +456,20 @@
     return true;
   }
 
+  function refreshDrift() {
+    if (!driftOn || driftRows.join(",") === driftBuiltFrom) return;
+    el.drift.classList.remove("ready");
+    setTimeout(() => {
+      if (!driftOn) return;
+      buildDrift();
+      el.drift.classList.add("ready");
+    }, DRIFT.fadeMs);
+  }
+
   function updateDrift() {
     const cold = searching && !!state && state.encoder.state !== "ready";
-    if (cold && !driftOn) driftOn = buildDrift();
-    else if (!searching) driftOn = false;
+    if ((settings.alwaysDrift || cold) && !driftOn) driftOn = buildDrift();
+    else if (driftOn && !settings.alwaysDrift && !searching) driftOn = false;
     const wasOn = el.drift.classList.contains("ready");
     el.drift.classList.toggle("ready", driftOn);
     if (driftOn) {
@@ -746,6 +757,7 @@
       if (seq === searchSeq) {
         searching = false;
         updateDrift();
+        if (settings.alwaysDrift) setTimeout(refreshDrift, 2500);
         render();
         fxEnd();
         poll();
@@ -871,6 +883,11 @@
       settings.offline = el.offline.checked;
       saveSettings();
     });
+    el.alwaysDrift.addEventListener("change", () => {
+      settings.alwaysDrift = el.alwaysDrift.checked;
+      saveSettings();
+      updateDrift();
+    });
     el.variant.addEventListener("change", () => {
       settings.variant = parseInt(el.variant.value, 10) || 0;
       saveSettings();
@@ -929,6 +946,7 @@
     const nav = (navigator.language || "").toLowerCase();
     lang = settings.lang || (nav.startsWith("zh") ? "zh" : nav.startsWith("ja") ? "ja" : "en");
     applyRowCap(settings.rowCap);
+    updateDrift();
     applyIdle();
     applyLang();
     render();

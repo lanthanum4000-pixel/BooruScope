@@ -232,7 +232,7 @@ func TestSearchImageReranked(t *testing.T) {
 func TestSearchWithoutRerank(t *testing.T) {
 	hs := newHarness(t)
 	exp := loadExpected(t)
-	rec := hs.do("PUT", "/api/settings", strings.NewReader(`{"rowCap":5,"variant":128,"rerank":false,"lang":"zh","idleUnload":true,"idleMinutes":3,"offline":false}`), true)
+	rec := hs.do("PUT", "/api/settings", strings.NewReader(`{"rowCap":5,"variant":128,"rerank":false,"lang":"zh","idleUnload":true,"idleMinutes":3,"offline":false,"alwaysDrift":true}`), true)
 	if rec.Code != 200 {
 		t.Fatalf("settings: %d", rec.Code)
 	}
@@ -246,7 +246,7 @@ func TestSearchWithoutRerank(t *testing.T) {
 		}
 	}
 	saved := loadSettings(hs.srv.cfg.SettingsPath)
-	if saved.RowCap != 5 || saved.Lang != "zh" || saved.Rerank || !saved.IdleUnload || saved.IdleMinutes != 3 || saved.Offline {
+	if saved.RowCap != 5 || saved.Lang != "zh" || saved.Rerank || !saved.IdleUnload || saved.IdleMinutes != 3 || saved.Offline || !saved.AlwaysDrift {
 		t.Fatalf("saved %+v", saved)
 	}
 }

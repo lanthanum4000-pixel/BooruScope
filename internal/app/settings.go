@@ -14,6 +14,7 @@ type Settings struct {
 	IdleUnload  bool   `json:"idleUnload"`
 	IdleMinutes int    `json:"idleMinutes"`
 	Offline     bool   `json:"offline"`
+	AlwaysDrift bool   `json:"alwaysDrift"`
 }
 
 const (
