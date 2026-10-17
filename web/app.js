@@ -724,13 +724,67 @@
 
   function setQuery(src) {
     fxKill();
-    if (query && query.blob) URL.revokeObjectURL(query.src);
+    if (query && query.blob && !hist.some((h) => h.query && h.query.src === query.src)) URL.revokeObjectURL(query.src);
     query = { src, blob: !!src && src.startsWith("blob:") };
     freshQuery = true;
   }
 
+  const HIST_MAX = 30;
+  let hist = [{ id: 0, query: null, results: [], done: null, scroll: 0 }];
+  let histPos = 0;
+  let histSeq = 0;
+
+  function histSaveScroll() {
+    if (hist[histPos]) hist[histPos].scroll = el.results.scrollTop;
+  }
+
+  function histPush() {
+    const entry = { id: ++histSeq, query: Object.assign({}, query), results, done: lastSearch, scroll: 0 };
+    const dropped = hist.splice(histPos + 1);
+    hist.push(entry);
+    while (hist.length > HIST_MAX + 1) dropped.push(hist.splice(1, 1)[0]);
+    for (const h of dropped) {
+      if (h.query && h.query.blob && !hist.some((k) => k.query && k.query.src === h.query.src)) URL.revokeObjectURL(h.query.src);
+    }
+    histPos = hist.length - 1;
+    try { history.pushState({ bs: entry.id }, ""); } catch (e) {}
+  }
+
+  function histRestore(entry) {
+    searchSeq++;
+    searching = false;
+    fxKill();
+    closeMenu();
+    for (const card of cards.values()) card.remove();
+    cards = new Map();
+    query = entry.query ? Object.assign({}, entry.query) : null;
+    results = entry.results;
+    lastSearch = entry.done;
+    revealed = new Set(results.map((_, i) => i));
+    freshQuery = !!query;
+    setMessage(entry.done ? { done: entry.done } : null);
+    updateDrift();
+    render();
+    el.results.scrollTop = entry.scroll || 0;
+    lastScrollTop = el.results.scrollTop;
+    render();
+  }
+
+  function wireHistory() {
+    try { history.replaceState({ bs: 0 }, ""); } catch (e) {}
+    window.addEventListener("popstate", (e) => {
+      const id = e.state && typeof e.state.bs === "number" ? e.state.bs : -1;
+      const i = hist.findIndex((h) => h.id === id);
+      if (i < 0) return;
+      histSaveScroll();
+      histPos = i;
+      histRestore(hist[i]);
+    });
+  }
+
   async function runSearch(send, src) {
     const seq = ++searchSeq;
+    histSaveScroll();
     clearResults();
     setQuery(src);
     searching = true;
@@ -749,6 +803,7 @@
       results = res.results || [];
       lastSearch = res;
       setMessage({ done: res });
+      histPush();
     } catch (e) {
       if (seq !== searchSeq) return;
       setMessage({ error: e });
@@ -935,6 +990,7 @@
 
   async function init() {
     heartbeat();
+    wireHistory();
     document.addEventListener("visibilitychange", updateDrift);
     wireMenu();
     wireDrop();

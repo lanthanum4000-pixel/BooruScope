@@ -21,7 +21,7 @@ import (
 
 const (
 	ResultCount  = 60
-	queryKeep    = 8
+	queryKeep    = 32
 	PostURLTpl   = "https://yande.re/post/show/"
 	encodeLimit  = 3 * time.Minute
 	fetchTimeout = 45 * time.Second
