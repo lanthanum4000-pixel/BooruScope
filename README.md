@@ -49,7 +49,7 @@ Run `BooruScope-Setup` (`BooruScope-Setup.exe` on Windows). It opens a small win
 - **Data**: the full index (pick M64, M96 or M128, and optionally the int8 rerank file) or the 1,000-post trial pack.
 - **Shortcuts** (Windows): desktop and Start menu.
 
-After the data, the installer creates the Python environment, installs PyTorch and Transformers, downloads the CLIP weights and encodes a test image, so BooruScope is ready to search the first time it opens. It checks for Python 3.9+ before it starts.
+Before downloading any data, the installer creates the Python environment, installs PyTorch and Transformers, downloads the CLIP weights and encodes a test image, so a broken Python setup shows up first and BooruScope is ready to search the first time it opens. It checks for Python 3.9+ before it starts.
 
 Downloads resume after an interruption and every file is checked against the SHA-256 in the published `manifest.json`. Running the installer again on the same folder updates the program, keeps verified data files, and only downloads what changed. To uninstall, pick the install folder in the installer and press **Remove this installation** (twice, to confirm). It deletes the program, its data files, the Python environment, the CLIP weights and the shortcuts, and keeps any other files in the folder. The installer is the BooruScope program itself: any copy whose file name contains `setup`, or that is started with `-setup`, runs as the installer.
 

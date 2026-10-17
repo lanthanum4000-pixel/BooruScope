@@ -378,9 +378,13 @@ func TestRuntimeFailureCodes(t *testing.T) {
 	}{{encoder.ErrNoPython, "no_python"}, {errors.New("pip exploded"), "runtime_failed"}} {
 		in := newInstaller(t, o)
 		in.Runtime = func(ctx context.Context, dir string, report func(encoder.Status)) error { return c.err }
+		o.reset()
 		p := runJob(t, in, m, Request{Dir: t.TempDir(), Choice: Choice{Pack: PackTrial}})
 		if p.State != JobFailed || p.Code != c.code {
 			t.Fatalf("%v: %+v", c.err, p)
+		}
+		if len(o.requests) != 0 {
+			t.Fatalf("data downloaded before the runtime check passed: %v", o.requests)
 		}
 	}
 }

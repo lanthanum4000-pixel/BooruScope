@@ -193,6 +193,21 @@ func (in *Installer) install(ctx context.Context, pack Pack, files []File, dir s
 	if err != nil {
 		return "", err
 	}
+	if in.Runtime != nil {
+		in.update(func(p *Progress) { p.Step = "runtime"; p.Runtime = &encoder.Status{State: encoder.StatePython} })
+		err := in.Runtime(ctx, dir, func(st encoder.Status) {
+			in.update(func(p *Progress) { p.Runtime = &st })
+		})
+		if err != nil {
+			if ctx.Err() != nil {
+				return "", ctx.Err()
+			}
+			if errors.Is(err, encoder.ErrNoPython) {
+				return "", &InstallError{Code: "no_python", Err: err}
+			}
+			return "", &InstallError{Code: "runtime_failed", Err: err}
+		}
+	}
 	verified := loadVerified(dataDir)
 	in.update(func(p *Progress) { p.Step = "download" })
 	for i, f := range files {
@@ -227,21 +242,6 @@ func (in *Installer) install(ctx context.Context, pack Pack, files []File, dir s
 		in.update(func(p *Progress) { p.Step = "shortcut" })
 		if err := in.Shortcut(exe, dir); err != nil && in.Logf != nil {
 			in.Logf("setup: shortcut: %v", err)
-		}
-	}
-	if in.Runtime != nil {
-		in.update(func(p *Progress) { p.Step = "runtime"; p.Runtime = &encoder.Status{State: encoder.StatePython} })
-		err := in.Runtime(ctx, dir, func(st encoder.Status) {
-			in.update(func(p *Progress) { p.Runtime = &st })
-		})
-		if err != nil {
-			if ctx.Err() != nil {
-				return "", ctx.Err()
-			}
-			if errors.Is(err, encoder.ErrNoPython) {
-				return "", &InstallError{Code: "no_python", Err: err}
-			}
-			return "", &InstallError{Code: "runtime_failed", Err: err}
 		}
 	}
 	return exe, nil
