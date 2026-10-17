@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="bs-token" content="{{TOKEN}}">
+<title>BooruScope</title>
+<link rel="icon" href="/assets/icon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="/assets/app.css">
+</head>
+<body>
+<header class="bar">
+  <div class="brand">
+    <img class="logo" src="/assets/icon.svg" alt="">
+    <span data-i18n="app.title"></span>
+  </div>
+  <div class="status">
+    <span class="dot" id="encDot"></span><span id="encText"></span>
+    <button type="button" class="link" id="encRetry" hidden data-i18n="enc.retry"></button>
+    <span class="sep"></span>
+    <span class="dot" id="libDot"></span><span id="libText"></span>
+  </div>
+  <div class="controls">
+    <label class="ctl">
+      <span data-i18n="rowCap.label"></span>
+      <input type="range" id="rowCap" min="3" max="6" step="1">
+      <output id="rowCapVal"></output>
+    </label>
+    <div class="seg" id="statusMode" role="group">
+      <button type="button" data-mode="badge" data-i18n="mode.badge"></button>
+      <button type="button" data-mode="emoji" data-i18n="mode.emoji"></button>
+    </div>
+    <label class="ctl">
+      <span data-i18n="variant.label"></span>
+      <select id="variant"></select>
+    </label>
+    <label class="ctl chk">
+      <input type="checkbox" id="rerank">
+      <span id="rerankText"></span>
+    </label>
+    <div class="seg" id="lang" role="group">
+      <button type="button" data-lang="zh">中文</button>
+      <button type="button" data-lang="en">EN</button>
+    </div>
+  </div>
+</header>
+<div class="msgline" id="msgline"></div>
+<main class="results" id="results">
+  <div class="spacer" id="spacer"></div>
+  <div class="empty" id="empty">
+    <div class="empty-art"></div>
+    <h1 id="emptyTitle" data-i18n="drop.title"></h1>
+    <p id="emptyHint" data-i18n="drop.hint"></p>
+    <p class="missing" id="missingHelp" hidden><span data-i18n="lib.missingHelp"></span><code id="missingDir"></code></p>
+  </div>
+</main>
+<div class="drop-overlay" id="dropOverlay"><div data-i18n="drop.overlay"></div></div>
+<div class="toast" id="toast" hidden></div>
+<script src="/assets/i18n.js"></script>
+<script src="/assets/app.js"></script>
+</body>
+</html>

@@ -1,0 +1,9 @@
+/run/
+/data/
+/runtime/
+/settings.json
+/booruscope
+/booruscope.exe
+/dist/
+__pycache__/
+*.pyc
