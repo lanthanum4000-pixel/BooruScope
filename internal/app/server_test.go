@@ -148,7 +148,7 @@ func newHarness(t *testing.T) *harness {
 		Library:      lib,
 		Encoder:      hs.enc,
 		Thumbs:       fetch.NewThumbs(1<<20, 2, fakeFetch),
-		Web:          fstest.MapFS{"index.html": {Data: []byte("<meta content=\"{{TOKEN}}\">")}},
+		Web:          fstest.MapFS{"index.html": {Data: []byte("<meta content=\"{{TOKEN}}\">")}, "lens.html": {Data: []byte("lens {{TOKEN}}")}},
 		SettingsPath: filepath.Join(t.TempDir(), "settings.json"),
 		OpenURL: func(u string) error {
 			hs.opened = append(hs.opened, u)
@@ -454,5 +454,58 @@ func TestFetchThenSearchStoredQuery(t *testing.T) {
 	}
 	if rec := hs.do("POST", "/api/search/query", strings.NewReader(`{"query":"q999"}`), true); rec.Code != http.StatusNotFound {
 		t.Fatalf("unknown query %d", rec.Code)
+	}
+}
+
+func TestSearchByCardRow(t *testing.T) {
+	hs := newHarness(t)
+	eng := hs.srv.cfg.Library.Engine()
+	rec := hs.do("POST", "/api/fetch/row", strings.NewReader(`{"row":12}`), true)
+	var f struct {
+		Query string `json:"query"`
+	}
+	if rec.Code != 200 || json.Unmarshal(rec.Body.Bytes(), &f) != nil || f.Query == "" {
+		t.Fatalf("fetch row %d %s", rec.Code, rec.Body.String())
+	}
+	if want := fetch.ThumbnailURL(eng.Posts.MD5Hex(12)).String(); hs.fetches[len(hs.fetches)-1] != want {
+		t.Fatalf("fetched %q, want %q", hs.fetches[len(hs.fetches)-1], want)
+	}
+	out := decodeSearch(t, hs.do("POST", "/api/search/query", strings.NewReader(`{"query":"`+f.Query+`"}`), true))
+	if len(out.Results) != ResultCount {
+		t.Fatalf("%d results", len(out.Results))
+	}
+	if rec := hs.do("POST", "/api/fetch/row", strings.NewReader(`{"row":99999}`), true); rec.Code != http.StatusBadRequest {
+		t.Fatalf("bad row %d", rec.Code)
+	}
+}
+
+func TestGoogleLensTargets(t *testing.T) {
+	hs := newHarness(t)
+	rec := hs.do("POST", "/api/fetch", strings.NewReader(`{"url":"https://img.example.org/a b.png"}`), true)
+	var f struct {
+		Query string `json:"query"`
+	}
+	json.Unmarshal(rec.Body.Bytes(), &f)
+	if rec := hs.do("POST", "/api/google", strings.NewReader(`{"query":"`+f.Query+`"}`), true); rec.Code != 200 {
+		t.Fatalf("google url %d", rec.Code)
+	}
+	if got := hs.opened[len(hs.opened)-1]; got != "https://lens.google.com/uploadbyurl?url=https%3A%2F%2Fimg.example.org%2Fa%2520b.png" {
+		t.Fatalf("opened %q", got)
+	}
+	out := decodeSearch(t, hs.do("POST", "/api/search/image", bytes.NewReader(pngBytes), true))
+	if rec := hs.do("POST", "/api/google", strings.NewReader(`{"query":"`+out.Query+`"}`), true); rec.Code != 200 || !strings.Contains(rec.Body.String(), `"upload":true`) {
+		t.Fatalf("google file %d %s", rec.Code, rec.Body.String())
+	}
+	local := hs.opened[len(hs.opened)-1]
+	want := "http://127.0.0.1:5555/lens?q=" + out.Query + "&t=" + hs.srv.Token()
+	if local != want {
+		t.Fatalf("opened %q, want %q", local, want)
+	}
+	page := hs.do("GET", "/lens?q="+out.Query+"&t="+hs.srv.Token(), nil, false)
+	if page.Code != 200 || !strings.Contains(page.Body.String(), hs.srv.Token()) {
+		t.Fatalf("lens page %d %q", page.Code, page.Body.String())
+	}
+	if page := hs.do("GET", "/lens?q="+out.Query+"&t=wrong", nil, false); page.Code != http.StatusForbidden {
+		t.Fatalf("lens page without token %d", page.Code)
 	}
 }

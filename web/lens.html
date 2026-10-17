@@ -1,0 +1,24 @@
+<!doctype html>
+<html lang="en" translate="no" class="notranslate">
+<head>
+<meta charset="utf-8">
+<meta name="google" content="notranslate">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="bs-token" content="{{TOKEN}}">
+<title>BooruScope → Google Lens</title>
+<link rel="icon" href="/assets/icon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="/assets/app.css">
+</head>
+<body class="lens-page">
+<main class="lens-box">
+  <img class="logo" src="/assets/icon.svg" alt="">
+  <p id="msg"></p>
+  <form id="form" method="POST" action="https://lens.google.com/v3/upload" enctype="multipart/form-data">
+    <input type="file" name="encoded_image" id="file" hidden>
+    <button type="submit" class="lens-btn" id="send" hidden></button>
+  </form>
+</main>
+<script src="/assets/i18n.js"></script>
+<script src="/assets/lens.js"></script>
+</body>
+</html>

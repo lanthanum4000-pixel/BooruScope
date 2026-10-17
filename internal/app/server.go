@@ -59,6 +59,7 @@ type Server struct {
 	settings   Settings
 	queries    []storedQuery
 	qseq       int
+	addr       string
 	lastActive time.Time
 	inflight   int
 	prevState  encoder.State
@@ -68,6 +69,7 @@ type storedQuery struct {
 	id   string
 	data []byte
 	ct   string
+	src  string
 }
 
 func New(cfg Config) *Server {
@@ -97,7 +99,12 @@ func (s *Server) Settings() Settings {
 	return s.settings
 }
 
-func (s *Server) SetAddr(addr string) { s.guard.SetAddr(addr) }
+func (s *Server) SetAddr(addr string) {
+	s.guard.SetAddr(addr)
+	s.mu.Lock()
+	s.addr = addr
+	s.mu.Unlock()
+}
 
 func (s *Server) Handler() http.Handler {
 	mux := http.NewServeMux()
@@ -109,6 +116,9 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("POST /api/search/url", s.handleSearchURL)
 	mux.HandleFunc("POST /api/fetch", s.handleFetchURL)
 	mux.HandleFunc("POST /api/search/query", s.handleSearchQuery)
+	mux.HandleFunc("POST /api/fetch/row", s.handleFetchRow)
+	mux.HandleFunc("POST /api/google", s.handleGoogle)
+	mux.HandleFunc("GET /lens", s.handleLens)
 	mux.HandleFunc("GET /api/query/{id}", s.handleQueryImage)
 	mux.HandleFunc("GET /api/thumb/{row}", s.handleThumb)
 	mux.HandleFunc("POST /api/open", s.handleOpen)
@@ -185,11 +195,15 @@ type searchResp struct {
 }
 
 func (s *Server) storeQuery(data []byte, ct string) string {
+	return s.storeQuerySrc(data, ct, "")
+}
+
+func (s *Server) storeQuerySrc(data []byte, ct, src string) string {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.qseq++
 	id := "q" + strconv.Itoa(s.qseq)
-	s.queries = append(s.queries, storedQuery{id: id, data: data, ct: ct})
+	s.queries = append(s.queries, storedQuery{id: id, data: data, ct: ct, src: src})
 	if len(s.queries) > queryKeep {
 		s.queries = s.queries[len(s.queries)-queryKeep:]
 	}
@@ -270,18 +284,18 @@ func refererFor(u *url.URL) string {
 	return fetch.OriginOf(u) + "/"
 }
 
-func (s *Server) fetchURL(w http.ResponseWriter, r *http.Request) ([]byte, string, bool) {
+func (s *Server) fetchURL(w http.ResponseWriter, r *http.Request) ([]byte, string, string, bool) {
 	var in struct {
 		URL string `json:"url"`
 	}
 	if err := json.NewDecoder(io.LimitReader(r.Body, 1<<20)).Decode(&in); err != nil {
 		writeErr(w, http.StatusBadRequest, "bad_request", err.Error())
-		return nil, "", false
+		return nil, "", "", false
 	}
 	u, err := fetch.ParseHTTP(in.URL)
 	if err != nil {
 		writeErr(w, http.StatusBadRequest, "bad_url", "")
-		return nil, "", false
+		return nil, "", "", false
 	}
 	ctx, cancel := context.WithTimeout(r.Context(), fetchTimeout)
 	defer cancel()
@@ -301,21 +315,89 @@ func (s *Server) fetchURL(w http.ResponseWriter, r *http.Request) ([]byte, strin
 		default:
 			writeErr(w, http.StatusBadGateway, "fetch_failed", err.Error())
 		}
-		return nil, "", false
+		return nil, "", "", false
 	}
-	return data, ct, true
+	return data, ct, u.String(), true
 }
 
 func (s *Server) handleSearchURL(w http.ResponseWriter, r *http.Request) {
-	if data, ct, ok := s.fetchURL(w, r); ok {
-		s.search(w, r, data, ct)
+	if data, ct, src, ok := s.fetchURL(w, r); ok {
+		s.searchAs(w, r, data, ct, s.storeQuerySrc(data, ct, src))
 	}
 }
 
 func (s *Server) handleFetchURL(w http.ResponseWriter, r *http.Request) {
-	if data, ct, ok := s.fetchURL(w, r); ok {
-		writeJSON(w, http.StatusOK, map[string]string{"query": s.storeQuery(data, ct)})
+	if data, ct, src, ok := s.fetchURL(w, r); ok {
+		writeJSON(w, http.StatusOK, map[string]string{"query": s.storeQuerySrc(data, ct, src)})
 	}
+}
+
+func (s *Server) handleFetchRow(w http.ResponseWriter, r *http.Request) {
+	var in struct {
+		Row int `json:"row"`
+	}
+	if err := json.NewDecoder(io.LimitReader(r.Body, 1<<12)).Decode(&in); err != nil {
+		writeErr(w, http.StatusBadRequest, "bad_request", err.Error())
+		return
+	}
+	eng := s.cfg.Library.Engine()
+	if eng == nil {
+		writeErr(w, http.StatusServiceUnavailable, "no_index", "")
+		return
+	}
+	row, ok := s.rowParam(r, eng, strconv.Itoa(in.Row))
+	if !ok {
+		writeErr(w, http.StatusBadRequest, "bad_row", "")
+		return
+	}
+	u := fetch.ThumbnailURL(eng.Posts.MD5Hex(row))
+	ctx, cancel := context.WithTimeout(r.Context(), fetchTimeout)
+	defer cancel()
+	t, err := s.cfg.Thumbs.Get(ctx, u)
+	if err != nil {
+		writeErr(w, http.StatusBadGateway, "fetch_failed", err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]string{"query": s.storeQuerySrc(t.Data, t.ContentType, u.String())})
+}
+
+const lensURL = "https://lens.google.com/uploadbyurl?url="
+
+func (s *Server) handleGoogle(w http.ResponseWriter, r *http.Request) {
+	var in struct {
+		Query string `json:"query"`
+	}
+	if err := json.NewDecoder(io.LimitReader(r.Body, 1<<12)).Decode(&in); err != nil {
+		writeErr(w, http.StatusBadRequest, "bad_request", err.Error())
+		return
+	}
+	q, ok := s.storedQuery(in.Query)
+	if !ok {
+		writeErr(w, http.StatusNotFound, "no_query", "")
+		return
+	}
+	target := ""
+	if q.src != "" {
+		target = lensURL + url.QueryEscape(q.src)
+	} else {
+		s.mu.Lock()
+		addr := s.addr
+		s.mu.Unlock()
+		target = "http://" + addr + "/lens?q=" + url.QueryEscape(q.id) + "&t=" + url.QueryEscape(s.Token())
+	}
+	if err := s.cfg.OpenURL(target); err != nil {
+		writeErr(w, http.StatusInternalServerError, "open_failed", err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]bool{"upload": q.src == ""})
+}
+
+func (s *Server) handleLens(w http.ResponseWriter, r *http.Request) {
+	if r.URL.Query().Get("t") != s.Token() {
+		http.Error(w, "forbidden", http.StatusForbidden)
+		return
+	}
+	s.guard.ServePage(w, s.cfg.Web, "lens.html")
 }
 
 func (s *Server) storedQuery(id string) (storedQuery, bool) {

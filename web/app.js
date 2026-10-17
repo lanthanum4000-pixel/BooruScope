@@ -116,7 +116,10 @@
     renderState();
     renderMessage();
     cards.forEach((c, i) => fillCardText(c, results[i]));
-    if (qtile) qtile.querySelector(".qlabel").textContent = t("query.label");
+    if (qtile) {
+      qtile.querySelector(".qlabel").textContent = t("query.label");
+      qtile.querySelector(".qlens").title = t("qlens.title");
+    }
   }
 
   function applyIdle() {
@@ -287,19 +290,96 @@
     if (!qtile) {
       qtile = document.createElement("div");
       qtile.className = "qtile";
-      qtile.innerHTML = '<div class="qframe"><img alt="" draggable="false"></div><span class="qlabel"></span>';
+      qtile.innerHTML = '<div class="qframe"><img alt="" draggable="false"><div class="qgrid" hidden></div>' +
+        '<button type="button" class="qact qlens"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' +
+        '<circle cx="10.5" cy="10.5" r="6.5"/><path d="M4 10.5h13"/><path d="M10.5 4c3 3.6 3 9.4 0 13c-3-3.6-3-9.4 0-13"/><path d="m15.5 15.5 5.5 5.5"/></svg></button>' +
+        '</div><span class="qlabel"></span>';
       qtile.querySelector(".qlabel").textContent = t("query.label");
+      qtile.querySelector(".qframe > img").addEventListener("load", layoutGrid);
+      qtile.querySelector(".qlens").addEventListener("click", openLens);
       el.spacer.appendChild(qtile);
     }
     const img = qtile.querySelector(".qframe > img");
     if (query.src && img.getAttribute("src") !== query.src) img.src = query.src;
     if (!query.src) img.removeAttribute("src");
+    const lens = qtile.querySelector(".qlens");
+    lens.disabled = !query.id;
+    lens.title = t("qlens.title");
     if (freshQuery) {
       freshQuery = false;
       qtile.classList.remove("pq-in");
       void qtile.offsetWidth;
       qtile.classList.add("pq-in");
     }
+  }
+
+  function imageRect(frame, img) {
+    const bw = frame.clientWidth, bh = frame.clientHeight;
+    if (!bw || !bh || !img.naturalWidth) return null;
+    const sc = Math.min(bw / img.naturalWidth, bh / img.naturalHeight);
+    const w = Math.round(img.naturalWidth * sc), h = Math.round(img.naturalHeight * sc);
+    return { x: Math.round((bw - w) / 2), y: Math.round((bh - h) / 2), w, h };
+  }
+
+  function layoutGrid() {
+    if (!qtile) return;
+    const frame = qtile.querySelector(".qframe");
+    const grid = frame.querySelector(".qgrid");
+    const r = imageRect(frame, frame.querySelector(":scope > img"));
+    if (!r) { grid.hidden = true; return; }
+    grid.style.left = r.x + "px";
+    grid.style.top = r.y + "px";
+    grid.style.width = r.w + "px";
+    grid.style.height = r.h + "px";
+    grid.style.setProperty("--cx", r.w / 16 + "px");
+    grid.style.setProperty("--cy", r.h / 16 + "px");
+    grid.style.setProperty("--cx4", r.w / 4 + "px");
+    grid.style.setProperty("--cy4", r.h / 4 + "px");
+    grid.hidden = false;
+  }
+
+  function openLens() {
+    if (!query || !query.id) return;
+    api("/api/google", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ query: query.id }) })
+      .then(() => showToast(t("lens.opened")))
+      .catch((err) => showToast(errText(err)));
+  }
+
+  let menu = null;
+
+  function closeMenu() {
+    if (menu) { menu.remove(); menu = null; }
+  }
+
+  function openMenu(x, y, r) {
+    closeMenu();
+    menu = div("ctxmenu");
+    const b = document.createElement("button");
+    b.type = "button";
+    b.className = "ctxitem";
+    b.textContent = t("ctx.search");
+    b.addEventListener("click", () => { closeMenu(); searchRow(r.row); });
+    menu.appendChild(b);
+    document.body.appendChild(menu);
+    menu.style.left = Math.max(4, Math.min(x, window.innerWidth - menu.offsetWidth - 4)) + "px";
+    menu.style.top = Math.max(4, Math.min(y, window.innerHeight - menu.offsetHeight - 4)) + "px";
+    b.focus();
+  }
+
+  function wireMenu() {
+    document.addEventListener("contextmenu", (e) => {
+      if (e.target.closest("input, textarea")) return;
+      e.preventDefault();
+      const card = e.target.closest(".card");
+      const r = card && results[parseInt(card.dataset.i, 10)];
+      if (r) openMenu(e.clientX, e.clientY, r);
+      else closeMenu();
+    });
+    document.addEventListener("mousedown", (e) => { if (menu && !menu.contains(e.target)) closeMenu(); });
+    document.addEventListener("keydown", (e) => { if (e.key === "Escape") closeMenu(); });
+    window.addEventListener("blur", closeMenu);
+    window.addEventListener("resize", closeMenu);
+    el.results.addEventListener("scroll", closeMenu, { passive: true });
   }
 
   function div(cls) {
@@ -336,17 +416,16 @@
       img.addEventListener("load", () => { if (searching) fxStart(); }, { once: true });
       return;
     }
-    const bw = frame.clientWidth, bh = frame.clientHeight;
-    if (!bw || !bh) return;
-    const sc = Math.min(bw / img.naturalWidth, bh / img.naturalHeight);
-    const w = Math.round(img.naturalWidth * sc), h = Math.round(img.naturalHeight * sc);
+    const rect = imageRect(frame, img);
+    if (!rect) return;
+    const { w, h } = rect;
     const key = img.src + "|" + w + "x" + h;
     if (fx && fx.key === key && !fx.ending) return;
     fxKill();
     fxFilters();
     const box = div("qfx");
-    box.style.left = Math.round((bw - w) / 2) + "px";
-    box.style.top = Math.round((bh - h) / 2) + "px";
+    box.style.left = rect.x + "px";
+    box.style.top = rect.y + "px";
     box.style.width = w + "px";
     box.style.height = h + "px";
     const wrap = div("qfx-wrap");
@@ -384,7 +463,7 @@
     tear.appendChild(tearImg);
     wrap.appendChild(tear);
     box.appendChild(div("qfx-vign"));
-    frame.appendChild(box);
+    frame.insertBefore(box, frame.querySelector(".qgrid"));
     img.classList.add("fx-hidden");
     const f = (fx = { box, img, key, ending: false, raf: 0, timers: [], started: performance.now() });
     const wobble = (ts) => {
@@ -496,6 +575,7 @@
       if (!keep.has(i)) { card.remove(); cards.delete(i); }
     }
     freshCards = false;
+    layoutGrid();
     if (searching) fxStart();
   }
 
@@ -533,6 +613,7 @@
       const res = await send(() => seq === searchSeq);
       if (seq !== searchSeq) return;
       if (!query.src) query.src = withToken("/api/query/" + res.query);
+      query.id = res.query;
       results = res.results || [];
       freshCards = true;
       lastSearch = res;
@@ -562,6 +643,20 @@
       const f = await api("/api/fetch", Object.assign({ body: JSON.stringify({ url }) }, json));
       if (current()) {
         query.src = withToken("/api/query/" + f.query);
+        query.id = f.query;
+        render();
+      }
+      return api("/api/search/query", Object.assign({ body: JSON.stringify({ query: f.query }) }, json));
+    }, null);
+  }
+
+  function searchRow(row) {
+    const json = { method: "POST", headers: { "Content-Type": "application/json" } };
+    return runSearch(async (current) => {
+      const f = await api("/api/fetch/row", Object.assign({ body: JSON.stringify({ row }) }, json));
+      if (current()) {
+        query.src = withToken("/api/query/" + f.query);
+        query.id = f.query;
         render();
       }
       return api("/api/search/query", Object.assign({ body: JSON.stringify({ query: f.query }) }, json));
@@ -697,6 +792,7 @@
 
   async function init() {
     heartbeat();
+    wireMenu();
     wireDrop();
     wireControls();
     try {

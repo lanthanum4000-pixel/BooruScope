@@ -304,6 +304,72 @@ body {
   transition: opacity 0.3s ease;
 }
 .qframe > img.fx-hidden { visibility: hidden; }
+.qgrid {
+  position: absolute;
+  z-index: 2;
+  pointer-events: none;
+  background-image:
+    repeating-linear-gradient(to right, rgba(250, 204, 21, 0.55) 0 2px, transparent 2px var(--cx4)),
+    repeating-linear-gradient(to bottom, rgba(250, 204, 21, 0.55) 0 2px, transparent 2px var(--cy4)),
+    repeating-linear-gradient(to right, rgba(56, 189, 248, 0.28) 0 1px, transparent 1px var(--cx)),
+    repeating-linear-gradient(to bottom, rgba(56, 189, 248, 0.28) 0 1px, transparent 1px var(--cy));
+  box-shadow: inset 0 0 0 1px rgba(56, 189, 248, 0.4);
+}
+.qgrid[hidden] { display: none; }
+.qact {
+  position: absolute;
+  top: 8px;
+  z-index: 4;
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  border: 0;
+  border-radius: 8px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(15, 23, 42, 0.72);
+  color: #e2e8f0;
+  cursor: pointer;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.5);
+  transition: background 0.12s ease, color 0.12s ease, transform 0.08s ease;
+}
+.qact svg { width: 18px; height: 18px; display: block; }
+.qact:hover:not(:disabled) { background: rgba(34, 211, 238, 0.94); color: #062a35; }
+.qact:active:not(:disabled) { transform: scale(0.9); }
+.qact:focus-visible { outline: 2px solid #22d3ee; outline-offset: 1px; }
+.qact:disabled { opacity: 0.4; cursor: default; }
+.qlens { left: 8px; }
+
+.ctxmenu {
+  position: fixed;
+  z-index: 20;
+  min-width: 170px;
+  padding: 4px;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  box-shadow: 0 10px 28px -8px rgba(15, 23, 42, 0.35);
+}
+.ctxitem {
+  display: block;
+  width: 100%;
+  text-align: left;
+  font: inherit;
+  font-size: 13px;
+  padding: 7px 12px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--ink);
+  cursor: pointer;
+}
+.ctxitem:hover, .ctxitem:focus-visible { background: var(--accent-soft); color: var(--high); outline: none; }
+
+.lens-page { overflow: auto; align-items: center; justify-content: center; }
+.lens-box { margin: auto; text-align: center; color: var(--ink-2); padding: 24px; }
+.lens-box .logo { width: 48px; height: 48px; }
+.lens-btn { font: inherit; margin-top: 8px; padding: 8px 16px; border-radius: 8px; border: 1px solid var(--accent); background: var(--accent); color: #fff; cursor: pointer; }
 .qlabel {
   display: block;
   margin-top: 6px;
@@ -315,7 +381,7 @@ body {
 .qtile.pq-in, .card.card-in { animation: card-in 0.44s ease; }
 @keyframes card-in { from { opacity: 0; transform: scale(0.96); } to { opacity: 1; transform: none; } }
 
-.qfx { position: absolute; pointer-events: none; overflow: hidden; transition: opacity 1.2s ease; }
+.qfx { position: absolute; z-index: 1; pointer-events: none; overflow: hidden; transition: opacity 1.2s ease; }
 .qfx.end { opacity: 0; }
 .qfx-wrap { position: absolute; inset: 0; }
 .qfx-ghost { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: fill; mix-blend-mode: screen; }
