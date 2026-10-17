@@ -69,6 +69,7 @@ type Request struct {
 	Dir      string `json:"dir"`
 	Choice   Choice `json:"choice"`
 	Shortcut bool   `json:"shortcut"`
+	Lang     string `json:"lang"`
 }
 
 type Installer struct {
@@ -233,11 +234,11 @@ func (in *Installer) install(ctx context.Context, pack Pack, files []File, dir s
 	if err := cleanup(dataDir, pack, files, verified); err != nil {
 		return "", err
 	}
+	variant := 0
 	if req.Choice.Pack == PackFull {
-		setVariant(filepath.Join(dir, "settings.json"), req.Choice.Variant)
-	} else {
-		setVariant(filepath.Join(dir, "settings.json"), 0)
+		variant = req.Choice.Variant
 	}
+	writeSettings(filepath.Join(dir, "settings.json"), variant, req.Lang)
 	if req.Shortcut && in.Shortcut != nil {
 		in.update(func(p *Progress) { p.Step = "shortcut" })
 		if err := in.Shortcut(exe, dir); err != nil && in.Logf != nil {
@@ -495,12 +496,16 @@ func cleanup(dataDir string, pack Pack, chosen []File, v verifiedSet) error {
 	return nil
 }
 
-func setVariant(path string, m int) {
+func writeSettings(path string, variant int, lang string) {
 	s := map[string]any{}
 	if b, err := os.ReadFile(path); err == nil {
 		json.Unmarshal(b, &s)
 	}
-	s["variant"] = m
+	s["variant"] = variant
+	switch lang {
+	case "en", "zh", "ja":
+		s["lang"] = lang
+	}
 	b, _ := json.MarshalIndent(s, "", "  ")
 	os.WriteFile(path, b, 0o644)
 }

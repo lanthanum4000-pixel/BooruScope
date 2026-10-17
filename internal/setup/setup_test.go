@@ -419,3 +419,27 @@ func TestInstallRefusedWithoutPython(t *testing.T) {
 		t.Fatalf("%d %s", rec.Code, rec.Body.String())
 	}
 }
+
+func TestInstallCarriesLanguageToApp(t *testing.T) {
+	o, m := newOrigin(t)
+	in := newInstaller(t, o)
+	dir := t.TempDir()
+	read := func() map[string]any {
+		var s map[string]any
+		b, _ := os.ReadFile(filepath.Join(dir, "settings.json"))
+		json.Unmarshal(b, &s)
+		return s
+	}
+	if p := runJob(t, in, m, Request{Dir: dir, Choice: Choice{Pack: PackTrial}, Lang: "ja"}); p.State != JobDone {
+		t.Fatalf("%+v", p)
+	}
+	if s := read(); s["lang"] != "ja" {
+		t.Fatalf("settings %v", s)
+	}
+	if p := runJob(t, in, m, Request{Dir: dir, Choice: Choice{Pack: PackTrial}, Lang: "klingon"}); p.State != JobDone {
+		t.Fatalf("%+v", p)
+	}
+	if s := read(); s["lang"] != "ja" {
+		t.Fatalf("unknown language overwrote the setting: %v", s)
+	}
+}

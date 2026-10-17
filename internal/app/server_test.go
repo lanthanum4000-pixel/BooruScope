@@ -424,3 +424,11 @@ func TestOfflineEnvOnlyWhenModelCached(t *testing.T) {
 		t.Fatalf("offline env while disabled: %v", hs.enc.env)
 	}
 }
+
+func TestSettingsAcceptJapanese(t *testing.T) {
+	for in, want := range map[string]string{"ja": "ja", "zh": "zh", "en": "en", "fr": ""} {
+		if got := (Settings{Lang: in}).normalized().Lang; got != want {
+			t.Errorf("%s -> %q, want %q", in, got, want)
+		}
+	}
+}

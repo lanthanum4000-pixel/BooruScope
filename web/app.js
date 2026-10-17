@@ -101,10 +101,13 @@
   }
 
   function applyLang() {
-    document.documentElement.lang = lang === "zh" ? "zh-Hant" : "en";
+    document.documentElement.lang = { zh: "zh-Hant", ja: "ja" }[lang] || "en";
     document.title = t("app.title");
     document.querySelectorAll("[data-i18n]").forEach((n) => { n.textContent = t(n.dataset.i18n); });
-    el.lang.querySelectorAll("button").forEach((b) => b.classList.toggle("active", b.dataset.lang === lang));
+    el.lang.querySelectorAll("button").forEach((b) => {
+      b.classList.toggle("active", b.dataset.lang === lang);
+      b.setAttribute("aria-pressed", b.dataset.lang === lang ? "true" : "false");
+    });
     el.rowCapVal.textContent = t("rowCap.value", { n: liveRowCap });
     renderState();
     renderMessage();
@@ -526,7 +529,8 @@
       state = await api("/api/state");
       settings = state.settings;
     } catch (e) {}
-    lang = settings.lang || ((navigator.language || "").toLowerCase().startsWith("zh") ? "zh" : "en");
+    const nav = (navigator.language || "").toLowerCase();
+    lang = settings.lang || (nav.startsWith("zh") ? "zh" : nav.startsWith("ja") ? "ja" : "en");
     applyRowCap(settings.rowCap);
     applyIdle();
     applyLang();

@@ -30,7 +30,7 @@ func DefaultSettings() Settings {
 }
 
 func (s Settings) normalized() Settings {
-	if s.Lang != "zh" && s.Lang != "en" {
+	if s.Lang != "zh" && s.Lang != "en" && s.Lang != "ja" {
 		s.Lang = ""
 	}
 	if s.RowCap < RowCapMin || s.RowCap > RowCapMax {

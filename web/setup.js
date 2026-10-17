@@ -7,7 +7,7 @@
 
   const RECOMMENDED = 128;
 
-  let lang = (navigator.language || "").toLowerCase().startsWith("zh") ? "zh" : "en";
+  let lang = "en";
   let state = null;
   let choice = { pack: "full", variant: RECOMMENDED, rerank: true };
   let dirCheck = null;
@@ -85,10 +85,13 @@
   }
 
   function applyLang() {
-    document.documentElement.lang = lang === "zh" ? "zh-Hant" : "en";
+    document.documentElement.lang = { zh: "zh-Hant", ja: "ja" }[lang] || "en";
     document.title = t("setup.title");
     document.querySelectorAll("[data-i18n]").forEach((n) => { n.textContent = t(n.dataset.i18n); });
-    $("lang").querySelectorAll("button").forEach((b) => b.classList.toggle("active", b.dataset.lang === lang));
+    $("lang").querySelectorAll("button").forEach((b) => {
+      b.classList.toggle("active", b.dataset.lang === lang);
+      b.setAttribute("aria-pressed", b.dataset.lang === lang ? "true" : "false");
+    });
     renderForm();
     renderProgress();
   }
@@ -385,7 +388,7 @@
       $("install").disabled = true;
       installError = null;
       try {
-        await api("/api/setup/install", { dir: $("dir").value.trim(), choice, shortcut: state.shortcuts && $("shortcut").checked });
+        await api("/api/setup/install", { dir: $("dir").value.trim(), choice, shortcut: state.shortcuts && $("shortcut").checked, lang });
       } catch (e) {
         installError = e;
       }

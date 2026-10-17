@@ -157,6 +157,12 @@ body {
 .seg button:last-child { border-right: 0; }
 .seg button:hover { background: var(--accent-soft); color: var(--ink); }
 .seg button.active { background: var(--accent-soft); color: var(--high); font-weight: 700; }
+.seg button:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; position: relative; z-index: 1; }
+#lang { border-color: rgba(8, 145, 178, 0.35); }
+#lang button { min-width: 44px; transition: background-color 0.15s, color 0.15s; }
+#lang button:hover:not(.active) { background: var(--accent-soft); color: var(--high); }
+#lang button.active { background: var(--accent); color: #fff; box-shadow: inset 0 -2px 0 rgba(0, 0, 0, 0.15); }
+#lang button.active:hover { background: var(--high); }
 
 .msgline {
   margin-left: auto;
