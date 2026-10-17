@@ -30,10 +30,11 @@
   let fx = null;
   let freshCards = false;
   let freshQuery = false;
-  const DRIFT = { keep: 30, perColumn: 9, minSources: 12, durations: [42, 49, 45, 53, 46], storeKey: "booruscope.driftRows" };
+  const DRIFT = { keep: 30, perColumn: 9, minSources: 12, durations: [42, 49, 45, 53, 46], storeKey: "booruscope.driftRows", fadeMs: 1300 };
   let driftRows = loadDriftRows();
   let driftSignature = "";
   let driftOn = false;
+  let driftStopTimer = 0;
   const FX = { aber: 2, cols: 6, breakEvery: 250, liftMs: 980, liftShift: 3, liftScale: 1.03, glitchEvery: 3200, glitchFrac: 0.08, glitchShift: 14, grain: 0.02, wobble: 0.5, wobbleHz: 1, minMs: 900, fadeMs: 1300 };
   let idleTimer = 0;
   let liveRowCap = 4;
@@ -215,7 +216,7 @@
   function busy() {
     if (!state) return true;
     const e = state.encoder.state;
-    return (e !== "ready" && e !== "error" && e !== "unloaded") || state.library.state === "loading";
+    return searching || (e !== "ready" && e !== "error" && e !== "unloaded") || state.library.state === "loading";
   }
 
   async function poll() {
@@ -454,9 +455,21 @@
   function updateDrift() {
     const cold = searching && !!state && state.encoder.state !== "ready";
     if (cold && !driftOn) driftOn = buildDrift();
-    else if (!cold) driftOn = false;
+    else if (!searching) driftOn = false;
+    const wasOn = el.drift.classList.contains("ready");
     el.drift.classList.toggle("ready", driftOn);
-    el.drift.classList.toggle("paused", !driftOn || document.hidden);
+    if (driftOn) {
+      clearTimeout(driftStopTimer);
+      driftStopTimer = 0;
+      el.drift.classList.toggle("paused", document.hidden);
+    } else if (wasOn) {
+      driftStopTimer = setTimeout(() => {
+        driftStopTimer = 0;
+        el.drift.classList.add("paused");
+      }, DRIFT.fadeMs);
+    } else if (!driftStopTimer) {
+      el.drift.classList.add("paused");
+    }
   }
 
   function div(cls) {
@@ -686,7 +699,7 @@
     idleDeadline = 0;
     tickCountdown();
     updateDrift();
-    if (state && state.encoder.state !== "ready") setTimeout(poll, 300);
+    setTimeout(poll, 150);
     try {
       const res = await send(() => seq === searchSeq);
       if (seq !== searchSeq) return;
