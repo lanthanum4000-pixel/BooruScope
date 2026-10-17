@@ -181,8 +181,8 @@ func TestRerankOverlapWithExact(t *testing.T) {
 			}
 		}
 	}
-	if r := sum / float64(10*len(qs)); r < 0.97 {
-		t.Fatalf("recall@10 vs exact %.3f, want >= 0.97", r)
+	if r := sum / float64(10*len(qs)); r < 0.95 {
+		t.Fatalf("recall@10 vs exact %.3f, want >= 0.95", r)
 	}
 }
 
@@ -196,6 +196,9 @@ func TestPostsAndMD5(t *testing.T) {
 	}
 	if h := p.MD5Hex(0); len(h) != 32 {
 		t.Fatalf("md5 hex %q", h)
+	}
+	if h := p.MD5Hex(181); h != "63e42b9c857303388222b340471dd300" {
+		t.Fatalf("md5 with trailing zero byte read as %q", h)
 	}
 }
 

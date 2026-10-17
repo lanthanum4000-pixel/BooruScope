@@ -1,8 +1,9 @@
 # Test pack (1,000 posts)
 
-A small data set in the release format ([`docs/FORMAT.md`](../../docs/FORMAT.md)) used by the Go tests.
+A small data set in the release format ([`docs/FORMAT.md`](../../docs/FORMAT.md)) used by the Go tests and published as the installer's trial pack.
 
-- 1,000 Gelbooru posts (general 479, sensitive 521), gathered by searching the full index with 77 seed images and collecting results rank by rank until 1,000 unique posts were reached.
+- 1,000 yande.re posts rated safe, gathered by searching the full index with 77 seed images and collecting results rank by rank until 1,000 unique posts were reached.
+- Same inclusion rules as the full index: rating `s` only, no posts tagged `nude`, `nipples`, `pussy`, `topless` or `underboob`, no posts with unreadable tags.
 - No images are included, only post IDs and MD5 hashes.
 
 ## `expected.json`
@@ -15,4 +16,4 @@ A small data set in the release format ([`docs/FORMAT.md`](../../docs/FORMAT.md)
 
 An implementation fed `query_vec_f32_le_b64` must reproduce `int8` and `none_m*` rank for rank, with scores within 1e-4.
 
-Mean top-10 overlap with `exact`: int8 0.981, M64 0.742, M96 0.781, M128 0.801.
+Mean top-10 overlap with `exact`: int8 0.961, M64 0.775, M96 0.801, M128 0.832.
