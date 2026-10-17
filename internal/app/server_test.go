@@ -535,3 +535,28 @@ func TestWindowKeepsRestoreSizeWhenMaximized(t *testing.T) {
 		t.Fatalf("tiny window overwrote %+v", got)
 	}
 }
+
+func TestIdleUnloadReleasesInt8WithCLIP(t *testing.T) {
+	hs := newHarness(t)
+	clk := &fakeClock{t: time.Unix(1_000_000, 0)}
+	hs.srv.cfg.Now = clk.now
+	lib := hs.srv.cfg.Library
+	if !lib.Status().Int8Loaded || lib.Engine().Int8 == nil {
+		t.Fatal("int8 not loaded at start")
+	}
+	hs.do("PUT", "/api/settings", strings.NewReader(`{"rowCap":4,"idleUnload":true,"idleMinutes":1,"rerank":true}`), true)
+	hs.srv.idleTick()
+	clk.add(time.Minute)
+	hs.srv.idleTick()
+	st := lib.Status()
+	if hs.enc.unloads != 1 || st.Int8Loaded || lib.Engine().Int8 != nil {
+		t.Fatalf("after idle: unloads %d, int8 %v", hs.enc.unloads, st.Int8Loaded)
+	}
+	if !st.HasRerank {
+		t.Fatal("rerank reported unavailable while unloaded")
+	}
+	out := decodeSearch(t, hs.do("POST", "/api/search/image", bytes.NewReader(pngBytes), true))
+	if !out.Reranked || hs.enc.starts != 1 || !lib.Status().Int8Loaded {
+		t.Fatalf("after search: reranked %v, starts %d, int8 %v", out.Reranked, hs.enc.starts, lib.Status().Int8Loaded)
+	}
+}

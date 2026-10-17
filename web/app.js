@@ -194,7 +194,7 @@
     updateDrift();
 
     const lib = state.library;
-    el.libText.textContent = t("lib." + lib.state, { m: lib.variant, rows: (lib.rows || 0).toLocaleString() });
+    el.libText.textContent = t("lib." + lib.state, { m: lib.variant, rows: (lib.rows || 0).toLocaleString() }) + (lib.state === "ready" && lib.int8Loaded ? t("lib.int8") : "");
     el.libText.title = lib.detail || lib.dir || "";
     el.libDot.className = "dot " + (lib.state === "ready" ? "ok" : lib.state === "loading" ? "busy" : "err");
 

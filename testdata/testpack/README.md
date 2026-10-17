@@ -3,7 +3,7 @@
 A small data set in the release format ([`docs/FORMAT.md`](../../docs/FORMAT.md)) used by the Go tests and published as the installer's trial pack.
 
 - 1,000 yande.re posts rated safe, gathered by searching the full index with 77 seed images and collecting results rank by rank until 1,000 unique posts were reached.
-- Same inclusion rules as the full index: rating `s` only, no posts tagged `nude`, `nipples`, `pussy`, `topless` or `underboob`, no posts with unreadable tags.
+- Same inclusion rules as the full index: only posts rated safe, without explicit tags or unreadable tags.
 - No images are included, only post IDs and MD5 hashes.
 
 ## `expected.json`

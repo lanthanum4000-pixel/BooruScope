@@ -29,14 +29,15 @@ const (
 )
 
 type LibraryStatus struct {
-	State     LibraryState `json:"state"`
-	Dir       string       `json:"dir"`
-	Available []int        `json:"available"`
-	Variant   int          `json:"variant"`
-	Rows      int          `json:"rows"`
-	HasRerank bool         `json:"hasRerank"`
-	Detail    string       `json:"detail,omitempty"`
-	LoadMs    int64        `json:"loadMs,omitempty"`
+	State      LibraryState `json:"state"`
+	Dir        string       `json:"dir"`
+	Available  []int        `json:"available"`
+	Variant    int          `json:"variant"`
+	Rows       int          `json:"rows"`
+	HasRerank  bool         `json:"hasRerank"`
+	Int8Loaded bool         `json:"int8Loaded"`
+	Detail     string       `json:"detail,omitempty"`
+	LoadMs     int64        `json:"loadMs,omitempty"`
 }
 
 type Library struct {
@@ -48,6 +49,8 @@ type Library struct {
 	engine  *index.Engine
 	posts   *index.Posts
 	rerank  *index.Int8
+	int8Off bool
+	int8Bad bool
 	loadGen int
 }
 
@@ -115,7 +118,7 @@ func (l *Library) Load(want int) {
 		l.mu.Unlock()
 		return
 	}
-	l.st = LibraryStatus{State: LibLoading, Dir: l.dir, Available: avail, Variant: m, HasRerank: l.st.HasRerank}
+	l.st = LibraryStatus{State: LibLoading, Dir: l.dir, Available: avail, Variant: m, HasRerank: l.st.HasRerank, Int8Loaded: l.st.Int8Loaded}
 	l.mu.Unlock()
 	go l.load(gen, m, avail)
 }
@@ -132,7 +135,7 @@ func (l *Library) load(gen, m int, avail []int) {
 		l.mu.Unlock()
 	}
 	l.mu.RLock()
-	posts, rerank := l.posts, l.rerank
+	posts := l.posts
 	l.mu.RUnlock()
 	var err error
 	if posts == nil {
@@ -141,14 +144,8 @@ func (l *Library) load(gen, m int, avail []int) {
 			return
 		}
 	}
-	if rerank == nil && exists(filepath.Join(l.dir, RerankFile)) {
-		if rerank, err = index.OpenInt8(filepath.Join(l.dir, RerankFile)); err != nil {
-			l.log("library: rerank file ignored: %v", err)
-			rerank = nil
-		}
-	}
 	l.mu.Lock()
-	l.posts, l.rerank = posts, rerank
+	l.posts = posts
 	l.engine = nil
 	l.mu.Unlock()
 	pq, err := index.LoadPQ(filepath.Join(l.dir, VariantFile(m)))
@@ -156,11 +153,7 @@ func (l *Library) load(gen, m int, avail []int) {
 		fail(err)
 		return
 	}
-	eng, err := index.NewEngine(pq, posts, rerank)
-	if err != nil && rerank != nil {
-		l.log("library: rerank file ignored: %v", err)
-		eng, err = index.NewEngine(pq, posts, nil)
-	}
+	eng, err := index.NewEngine(pq, posts, nil)
 	if err != nil {
 		fail(err)
 		return
@@ -171,8 +164,62 @@ func (l *Library) load(gen, m int, avail []int) {
 		return
 	}
 	l.engine = eng
-	l.st = LibraryStatus{State: LibReady, Dir: l.dir, Available: avail, Variant: m, Rows: pq.N, HasRerank: eng.Int8 != nil, LoadMs: time.Since(t0).Milliseconds()}
-	l.log("library: loaded m%d, %d rows, rerank=%v, %v", m, pq.N, eng.Int8 != nil, time.Since(t0).Round(time.Millisecond))
+	l.st = LibraryStatus{State: LibReady, Dir: l.dir, Available: avail, Variant: m, Rows: pq.N, LoadMs: time.Since(t0).Milliseconds()}
+	if !l.int8Off {
+		l.attachInt8()
+	}
+	l.st.HasRerank = !l.int8Bad && exists(filepath.Join(l.dir, RerankFile))
+	l.log("library: loaded m%d, %d rows, int8=%v, %v", m, pq.N, l.engine.Int8 != nil, time.Since(t0).Round(time.Millisecond))
+}
+
+func (l *Library) attachInt8() {
+	if l.engine == nil || l.engine.Int8 != nil || l.int8Bad {
+		return
+	}
+	if l.rerank == nil {
+		path := filepath.Join(l.dir, RerankFile)
+		if !exists(path) {
+			return
+		}
+		rr, err := index.OpenInt8(path)
+		if err != nil {
+			l.log("library: rerank file ignored: %v", err)
+			l.int8Bad = true
+			return
+		}
+		l.rerank = rr
+	}
+	eng, err := index.NewEngine(l.engine.PQ, l.engine.Posts, l.rerank)
+	if err != nil {
+		l.log("library: rerank file ignored: %v", err)
+		l.rerank.Close()
+		l.rerank = nil
+		l.int8Bad = true
+		return
+	}
+	l.engine = eng
+	l.st.Int8Loaded = true
+}
+
+func (l *Library) SetInt8Loaded(on bool) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	l.int8Off = !on
+	if on {
+		l.attachInt8()
+		return
+	}
+	if l.engine != nil && l.engine.Int8 != nil {
+		eng := *l.engine
+		eng.Int8 = nil
+		l.engine = &eng
+	}
+	if l.rerank != nil {
+		l.rerank.Close()
+		l.rerank = nil
+		l.log("library: int8 rerank file closed")
+	}
+	l.st.Int8Loaded = false
 }
 
 func (l *Library) Close() {

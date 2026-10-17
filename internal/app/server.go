@@ -247,8 +247,7 @@ func (s *Server) search(w http.ResponseWriter, r *http.Request, img []byte, ct s
 }
 
 func (s *Server) searchAs(w http.ResponseWriter, r *http.Request, img []byte, ct, qid string) {
-	eng := s.cfg.Library.Engine()
-	if eng == nil {
+	if s.cfg.Library.Engine() == nil {
 		writeErr(w, http.StatusServiceUnavailable, "no_index", string(s.cfg.Library.Status().State))
 		return
 	}
@@ -256,6 +255,12 @@ func (s *Server) searchAs(w http.ResponseWriter, r *http.Request, img []byte, ct
 	defer s.endWork()
 	if err := s.ensureEncoder(r.Context()); err != nil {
 		writeErr(w, http.StatusServiceUnavailable, "encoder_not_ready", string(s.cfg.Encoder.Status().State))
+		return
+	}
+	s.cfg.Library.SetInt8Loaded(true)
+	eng := s.cfg.Library.Engine()
+	if eng == nil {
+		writeErr(w, http.StatusServiceUnavailable, "no_index", string(s.cfg.Library.Status().State))
 		return
 	}
 	if qid == "" {

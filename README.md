@@ -90,7 +90,7 @@ Logs go to `<home>/runtime/booruscope.log` (installer: `booruscope-setup.log` in
 - The magnifier on the query image opens Google Lens for it in your default browser. Images that came from a link are passed by URL; local files are uploaded to Lens from a small local page.
 - Right-click a result card and choose **Search with this image** to search again from that post's preview. Other right-click menus are disabled.
 - **Per row** (3–6) resizes the grid. **Index** picks M64/M96/M128. **int8 rerank** turns reranking on or off. **EN / 中文 / 日本語** switches the interface language (the installer starts in English and passes your choice on to the app).
-- **Unload when idle** (off by default, 10 minutes): while no search runs, a countdown is shown; at zero CLIP is unloaded to free memory, and the next search loads it again automatically.
+- **Unload when idle** (off by default, 10 minutes): while no search runs, a countdown is shown; at zero CLIP is unloaded and the int8 rerank file is closed, and the next search loads both again automatically. The status bar shows `int8` next to the index while the rerank file is loaded.
 - **Offline start** (on by default): once the model is downloaded, CLIP loads without checking Hugging Face for updates. It applies the next time CLIP loads.
 - Each search is kept in the window's history (up to 30): use the mouse back/forward buttons or Alt+← / Alt+→ to return to an earlier query with its results and scroll position, without searching again.
 - Double-click a card to open `https://yande.re/post/show/<id>` in your default browser.
@@ -132,4 +132,4 @@ BooruScope does not ship model weights. On first start it downloads [`openai/cli
 
 ## Content
 
-The index only covers posts rated safe (`s`), and skips posts tagged `nude`, `nipples`, `pussy`, `topless` or `underboob` and posts whose tags could not be read. Thumbnails are loaded from yande.re when results are shown and are never stored on disk.
+The index only includes posts that yande.re rates safe. Posts with explicit tags were left out when the index was built, and so were posts whose tags could not be read. Thumbnails are loaded from yande.re only when results are shown and are never stored on disk.

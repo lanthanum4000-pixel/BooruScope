@@ -61,9 +61,12 @@ func (s *Server) idleTick() {
 	}
 	s.prevState = state
 	due := set.IdleUnload && state == encoder.StateReady && s.inflight == 0 && !s.now().Before(s.lastActive.Add(s.idleDuration(set)))
+	if due {
+		s.cfg.Library.SetInt8Loaded(false)
+	}
 	s.mu.Unlock()
 	if due {
-		s.cfg.Logf("encoder: idle for %d min, unloading CLIP", set.IdleMinutes)
+		s.cfg.Logf("encoder: idle for %d min, unloading CLIP and int8", set.IdleMinutes)
 		s.cfg.Encoder.Unload()
 	}
 }
@@ -105,6 +108,7 @@ func (s *Server) encoderEnv() []string {
 }
 
 func (s *Server) StartEncoder() {
+	s.cfg.Library.SetInt8Loaded(true)
 	s.cfg.Encoder.SetExtraEnv(s.encoderEnv())
 	s.cfg.Encoder.Start()
 }
