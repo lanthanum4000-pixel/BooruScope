@@ -43,7 +43,11 @@ func TestHelperProcess(t *testing.T) {
 			continue
 		}
 		v := make([]byte, 4*Dim)
-		binary.LittleEndian.PutUint32(v, math.Float32bits(float32(len(img))))
+		first := float32(len(img))
+		if len(img) > 4 && string(img[1:4]) == "PNG" {
+			first = 1
+		}
+		binary.LittleEndian.PutUint32(v, math.Float32bits(first))
 		emit(map[string]any{"id": req.ID, "vector": base64.StdEncoding.EncodeToString(v)})
 	}
 	os.Exit(0)
@@ -139,4 +143,28 @@ func TestRestartAfterExit(t *testing.T) {
 	}
 	e.Restart()
 	waitState(t, e, StateReady)
+}
+
+func TestVerifyRunsTestImage(t *testing.T) {
+	e := fakeEncoder(t)
+	defer e.Close()
+	if err := e.Verify(context.Background()); err != nil {
+		t.Fatalf("%v; log %v", err, e.Log())
+	}
+	if st := e.Status(); st.State != StateReady || st.Device != "cpu" {
+		t.Fatalf("%+v", st)
+	}
+	if _, err := e.Encode(context.Background(), TestImage()); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestVerifyWithoutPython(t *testing.T) {
+	e := New(Options{Dir: t.TempDir(), Python: filepath.Join(t.TempDir(), "none")})
+	if err := e.Verify(context.Background()); !errors.Is(err, ErrNoPython) {
+		t.Fatalf("err %v", err)
+	}
+	if st := e.Status(); st.State != StateError || st.Code != "no_python" {
+		t.Fatalf("%+v", st)
+	}
 }

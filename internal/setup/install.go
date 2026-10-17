@@ -16,6 +16,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/lanthanum4000-pixel/BooruScope/internal/encoder"
 	"github.com/lanthanum4000-pixel/BooruScope/internal/fetch"
 )
 
@@ -53,14 +54,15 @@ type FileProgress struct {
 }
 
 type Progress struct {
-	State JobState       `json:"state"`
-	Step  string         `json:"step,omitempty"`
-	Files []FileProgress `json:"files"`
-	Speed int64          `json:"speed"`
-	Code  string         `json:"code,omitempty"`
-	Error string         `json:"error,omitempty"`
-	Dir   string         `json:"dir,omitempty"`
-	Exe   string         `json:"exe,omitempty"`
+	State   JobState        `json:"state"`
+	Step    string          `json:"step,omitempty"`
+	Files   []FileProgress  `json:"files"`
+	Runtime *encoder.Status `json:"runtime,omitempty"`
+	Speed   int64           `json:"speed"`
+	Code    string          `json:"code,omitempty"`
+	Error   string          `json:"error,omitempty"`
+	Dir     string          `json:"dir,omitempty"`
+	Exe     string          `json:"exe,omitempty"`
 }
 
 type Request struct {
@@ -75,6 +77,7 @@ type Installer struct {
 	Client   *http.Client
 	SelfExe  string
 	Shortcut func(exe, dir string) error
+	Runtime  RuntimeFunc
 	Logf     func(string, ...any)
 
 	mu     sync.Mutex
@@ -224,6 +227,21 @@ func (in *Installer) install(ctx context.Context, pack Pack, files []File, dir s
 		in.update(func(p *Progress) { p.Step = "shortcut" })
 		if err := in.Shortcut(exe, dir); err != nil && in.Logf != nil {
 			in.Logf("setup: shortcut: %v", err)
+		}
+	}
+	if in.Runtime != nil {
+		in.update(func(p *Progress) { p.Step = "runtime"; p.Runtime = &encoder.Status{State: encoder.StatePython} })
+		err := in.Runtime(ctx, dir, func(st encoder.Status) {
+			in.update(func(p *Progress) { p.Runtime = &st })
+		})
+		if err != nil {
+			if ctx.Err() != nil {
+				return "", ctx.Err()
+			}
+			if errors.Is(err, encoder.ErrNoPython) {
+				return "", &InstallError{Code: "no_python", Err: err}
+			}
+			return "", &InstallError{Code: "runtime_failed", Err: err}
 		}
 	}
 	return exe, nil

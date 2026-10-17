@@ -85,4 +85,18 @@ func CreateShortcuts(exe, dir string) error {
 	return err
 }
 
+func RemoveShortcuts(exe string) error {
+	script := "$w = New-Object -ComObject WScript.Shell\n" +
+		"$target = [IO.Path]::GetFullPath(" + psQuote(exe) + ")\n" +
+		"foreach ($f in @([Environment]::GetFolderPath('Desktop'), [Environment]::GetFolderPath('Programs'))) {\n" +
+		"  $p = Join-Path $f 'BooruScope.lnk'\n" +
+		"  if (Test-Path -LiteralPath $p) {\n" +
+		"    $t = $w.CreateShortcut($p).TargetPath\n" +
+		"    if ($t -and ([IO.Path]::GetFullPath($t) -ieq $target)) { Remove-Item -LiteralPath $p -Force }\n" +
+		"  }\n" +
+		"}"
+	_, err := powershell(script)
+	return err
+}
+
 func ShortcutsSupported() bool { return true }

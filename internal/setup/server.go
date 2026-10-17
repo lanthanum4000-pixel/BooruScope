@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"os/exec"
 	"runtime"
+	"strings"
 	"sync"
 	"time"
 
@@ -26,6 +27,11 @@ type Server struct {
 	pick   func(initial, prompt string) (string, error)
 	launch func(exe, dir string) error
 
+	removeShortcuts func(exe string) error
+	findPython      func(ctx context.Context) (string, error)
+	python          string
+	pythonChecked   bool
+
 	mu       sync.Mutex
 	manifest *Manifest
 	manErr   error
@@ -42,6 +48,10 @@ type ServerConfig struct {
 	Launch  func(exe, dir string) error
 	Client  *http.Client
 	Token   string
+
+	RemoveShortcuts func(exe string) error
+	Runtime         RuntimeFunc
+	FindPython      func(ctx context.Context) (string, error)
 }
 
 func NewServer(cfg ServerConfig) *Server {
@@ -54,6 +64,15 @@ func NewServer(cfg ServerConfig) *Server {
 	if cfg.Launch == nil {
 		cfg.Launch = LaunchApp
 	}
+	if cfg.RemoveShortcuts == nil {
+		cfg.RemoveShortcuts = RemoveShortcuts
+	}
+	if cfg.Runtime == nil {
+		cfg.Runtime = PrepareRuntime(cfg.Logf)
+	}
+	if cfg.FindPython == nil {
+		cfg.FindPython = DetectPython
+	}
 	s := &Server{
 		guard:  localweb.NewGuard(),
 		web:    cfg.Web,
@@ -62,11 +81,40 @@ func NewServer(cfg ServerConfig) *Server {
 		quit:   make(chan struct{}),
 		pick:   cfg.Pick,
 		launch: cfg.Launch,
-		token:  cfg.Token,
-		inst:   &Installer{Source: cfg.Source, Token: cfg.Token, SelfExe: cfg.SelfExe, Shortcut: CreateShortcuts, Logf: cfg.Logf, Client: cfg.Client},
+
+		removeShortcuts: cfg.RemoveShortcuts,
+		findPython:      cfg.FindPython,
+		token:           cfg.Token,
+		inst:            &Installer{Source: cfg.Source, Token: cfg.Token, SelfExe: cfg.SelfExe, Shortcut: CreateShortcuts, Runtime: cfg.Runtime, Logf: cfg.Logf, Client: cfg.Client},
 	}
 	s.loadManifest()
+	s.checkPython()
 	return s
+}
+
+func (s *Server) checkPython() {
+	s.mu.Lock()
+	s.pythonChecked = false
+	s.mu.Unlock()
+	go func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+		defer cancel()
+		v, err := s.findPython(ctx)
+		if err != nil {
+			s.logf("setup: python: %v", err)
+		} else {
+			s.logf("setup: python %s", v)
+		}
+		s.mu.Lock()
+		s.python, s.pythonChecked = v, true
+		s.mu.Unlock()
+	}()
+}
+
+func (s *Server) pythonState() (string, bool) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.python, s.pythonChecked
 }
 
 func LaunchApp(exe, dir string) error {
@@ -127,6 +175,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /api/setup/progress", s.handleProgress)
 	mux.HandleFunc("POST /api/setup/cancel", s.handleCancel)
 	mux.HandleFunc("POST /api/setup/launch", s.handleLaunch)
+	mux.HandleFunc("POST /api/setup/uninstall", s.handleUninstall)
 	mux.HandleFunc("POST /api/setup/quit", s.handleQuit)
 	return s.guard.Wrap(mux)
 }
@@ -145,13 +194,16 @@ type stateResp struct {
 	ManErr     string              `json:"manifestError,omitempty"`
 	ManAuth    bool                `json:"manifestAuth,omitempty"`
 	HasToken   bool                `json:"hasToken"`
+	Python     string              `json:"python"`
+	PyChecked  bool                `json:"pythonChecked"`
 	Loading    bool                `json:"manifestLoading"`
 	Progress   Progress            `json:"progress"`
 }
 
 func (s *Server) handleState(w http.ResponseWriter, r *http.Request) {
 	m, err, loading := s.manifestState()
-	out := stateResp{DefaultDir: DefaultDir(), OS: runtime.GOOS, Shortcuts: ShortcutsSupported(), Source: s.source, Loading: loading, Progress: s.inst.Progress(), HasToken: s.token != ""}
+	py, pyChecked := s.pythonState()
+	out := stateResp{DefaultDir: DefaultDir(), OS: runtime.GOOS, Shortcuts: ShortcutsSupported(), Source: s.source, Loading: loading, Progress: s.inst.Progress(), HasToken: s.token != "", Python: py, PyChecked: pyChecked}
 	if err != nil {
 		out.ManErr = err.Error()
 		out.ManAuth = IsAuthError(err)
@@ -171,6 +223,7 @@ func (s *Server) handleState(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) handleReload(w http.ResponseWriter, r *http.Request) {
 	s.loadManifest()
+	s.checkPython()
 	localweb.WriteJSON(w, http.StatusOK, map[string]bool{"ok": true})
 }
 
@@ -243,6 +296,11 @@ func (s *Server) handleInstall(w http.ResponseWriter, r *http.Request) {
 		localweb.WriteErr(w, http.StatusBadRequest, "not_writable", c.Dir)
 		return
 	}
+	if py, checked := s.pythonState(); checked && py == "" {
+		s.logf("setup: install refused: no Python")
+		localweb.WriteErr(w, http.StatusBadRequest, "no_python", "")
+		return
+	}
 	in.Dir = c.Dir
 	if err := s.inst.Start(m, in); err != nil {
 		s.logf("setup: install refused: %v", err)
@@ -276,6 +334,39 @@ func (s *Server) handleLaunch(w http.ResponseWriter, r *http.Request) {
 		time.Sleep(500 * time.Millisecond)
 		s.requestQuit()
 	}()
+}
+
+func (s *Server) handleUninstall(w http.ResponseWriter, r *http.Request) {
+	var in struct {
+		Dir string `json:"dir"`
+	}
+	if err := decode(r, &in); err != nil || strings.TrimSpace(in.Dir) == "" {
+		localweb.WriteErr(w, http.StatusBadRequest, "bad_dir", "")
+		return
+	}
+	if s.inst.Progress().State == JobRunning {
+		localweb.WriteErr(w, http.StatusConflict, "busy", "")
+		return
+	}
+	s.logf("setup: uninstall requested: %q", in.Dir)
+	res, err := Uninstall(in.Dir, s.inst.SelfExe, s.removeShortcuts)
+	if err != nil {
+		s.logf("setup: uninstall: %v", err)
+		code := "remove_failed"
+		var ie *InstallError
+		switch {
+		case errors.Is(err, ErrNotInstall):
+			code = "not_installed_here"
+		case errors.Is(err, ErrUninstallMe):
+			code = "uninstall_self"
+		case errors.As(err, &ie):
+			code = ie.Code
+		}
+		localweb.WriteJSON(w, http.StatusOK, map[string]any{"error": code, "detail": err.Error(), "result": res})
+		return
+	}
+	s.logf("setup: uninstalled %s: %d items removed, folder removed=%v, kept=%v", res.Dir, res.Removed, res.DirRemoved, res.Kept)
+	localweb.WriteJSON(w, http.StatusOK, res)
 }
 
 func (s *Server) handleQuit(w http.ResponseWriter, r *http.Request) {

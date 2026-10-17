@@ -66,23 +66,35 @@ func pythonCandidates() [][]string {
 	return [][]string{{"python3"}, {"python"}}
 }
 
-func (e *Encoder) findPython(ctx context.Context) ([]string, error) {
+func FindPython(ctx context.Context, override string) ([]string, string, error) {
 	cands := pythonCandidates()
-	if e.opt.Python != "" {
-		cands = [][]string{{e.opt.Python}}
+	if override != "" {
+		cands = [][]string{{override}}
 	}
-	probe := "import sys, venv; sys.exit(0 if sys.version_info >= (3, 9) else 3)"
+	probe := "import sys, venv; print('%d.%d.%d' % sys.version_info[:3]); sys.exit(0 if sys.version_info >= (3, 9) else 3)"
 	for _, c := range cands {
 		if _, err := exec.LookPath(c[0]); err != nil {
 			continue
 		}
 		args := append(append([]string{}, c[1:]...), "-c", probe)
-		cmd := proc.Hide(exec.CommandContext(ctx, c[0], args...))
-		if err := cmd.Run(); err == nil {
-			return c, nil
+		out, err := proc.Hide(exec.CommandContext(ctx, c[0], args...)).Output()
+		if err == nil {
+			return c, strings.TrimSpace(string(out)), nil
 		}
 	}
-	return nil, ErrNoPython
+	return nil, "", ErrNoPython
+}
+
+func HFHome(runtimeDir string) string {
+	if h := os.Getenv("HF_HOME"); h != "" {
+		return h
+	}
+	return filepath.Join(runtimeDir, "huggingface")
+}
+
+func (e *Encoder) findPython(ctx context.Context) ([]string, error) {
+	c, _, err := FindPython(ctx, e.opt.Python)
+	return c, err
 }
 
 func (e *Encoder) ensureVenv(ctx context.Context) error {
@@ -140,7 +152,7 @@ func (e *Encoder) ensureVenv(ctx context.Context) error {
 
 func (e *Encoder) runLogged(ctx context.Context, name string, args ...string) error {
 	cmd := proc.Hide(exec.CommandContext(ctx, name, args...))
-	cmd.Env = append(os.Environ(), "PYTHONIOENCODING=utf-8", "PIP_NO_INPUT=1")
+	cmd.Env = append(append(os.Environ(), e.opt.Env...), "PYTHONIOENCODING=utf-8", "PIP_NO_INPUT=1")
 	pr, pw := io.Pipe()
 	cmd.Stdout = pw
 	cmd.Stderr = pw

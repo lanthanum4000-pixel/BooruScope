@@ -64,4 +64,6 @@ func lookPath(name string) bool {
 
 func CreateShortcuts(exe, dir string) error { return nil }
 
+func RemoveShortcuts(exe string) error { return nil }
+
 func ShortcutsSupported() bool { return false }

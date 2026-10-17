@@ -98,16 +98,13 @@ func main() {
 		defer f.Close()
 		logger.SetOutput(io.MultiWriter(f, os.Stderr))
 	}
-	if os.Getenv("HF_HOME") == "" {
-		os.Setenv("HF_HOME", filepath.Join(runtimeDir, "huggingface"))
-	}
-
 	enc := encoder.New(encoder.Options{
 		Dir:        runtimeDir,
 		Python:     *python,
 		TorchIndex: *torchIndex,
 		Model:      *model,
 		Device:     *device,
+		Env:        []string{"HF_HOME=" + encoder.HFHome(runtimeDir)},
 		Logf:       logf,
 	})
 	lib := app.NewLibrary(*dataDir, logf)

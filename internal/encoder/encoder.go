@@ -57,6 +57,7 @@ type Options struct {
 	TorchIndex string
 	Model      string
 	Device     string
+	Env        []string
 	Logf       func(format string, args ...any)
 }
 
@@ -185,7 +186,7 @@ func (e *Encoder) boot(ctx context.Context) error {
 	}
 	cmd := proc.Hide(exec.CommandContext(ctx, e.venvPython(), "-u", scriptPath, "--model", e.opt.Model, "--device", e.opt.Device))
 	cmd.Dir = scriptDir
-	cmd.Env = append(os.Environ(), "PYTHONIOENCODING=utf-8", "PYTHONUNBUFFERED=1", "PYTHONNOUSERSITE=1", "HF_HUB_DISABLE_TELEMETRY=1")
+	cmd.Env = append(append(os.Environ(), e.opt.Env...), "PYTHONIOENCODING=utf-8", "PYTHONUNBUFFERED=1", "PYTHONNOUSERSITE=1", "HF_HUB_DISABLE_TELEMETRY=1")
 	stdin, err := cmd.StdinPipe()
 	if err != nil {
 		return err

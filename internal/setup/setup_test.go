@@ -2,9 +2,11 @@ package setup
 
 import (
 	"bytes"
+	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"io"
 	"math/rand"
 	"net/http"
@@ -17,6 +19,7 @@ import (
 	"testing/fstest"
 	"time"
 
+	"github.com/lanthanum4000-pixel/BooruScope/internal/encoder"
 	"github.com/lanthanum4000-pixel/BooruScope/internal/localweb"
 )
 
@@ -260,6 +263,12 @@ func TestServerFlow(t *testing.T) {
 			launched = append(launched, exe)
 			return nil
 		},
+		FindPython: func(ctx context.Context) (string, error) { return "3.12.4", nil },
+		Runtime: func(ctx context.Context, dir string, report func(encoder.Status)) error {
+			report(encoder.Status{State: encoder.StateInstall, Step: "torch"})
+			report(encoder.Status{State: encoder.StateReady, Device: "cpu"})
+			return nil
+		},
 	})
 	s.SetAddr("127.0.0.1:6000")
 	h := s.Handler()
@@ -305,8 +314,11 @@ func TestServerFlow(t *testing.T) {
 	for s.Installer().Progress().State == JobRunning {
 		time.Sleep(10 * time.Millisecond)
 	}
-	if p := s.Installer().Progress(); p.State != JobDone {
+	if p := s.Installer().Progress(); p.State != JobDone || p.Runtime == nil || p.Runtime.State != encoder.StateReady {
 		t.Fatalf("progress %+v", p)
+	}
+	if _, st := call("GET", "/api/setup/state", nil); st["python"] != "3.12.4" {
+		t.Fatalf("python %v", st["python"])
 	}
 	if code, _ := call("POST", "/api/setup/launch", map[string]any{}); code != 200 || len(launched) != 1 {
 		t.Fatalf("launch %d %v", code, launched)
@@ -355,5 +367,51 @@ func TestCancelStopsDownload(t *testing.T) {
 	in.Cancel()
 	if p := in.Progress(); p.State != JobCancelled {
 		t.Fatalf("%+v", p)
+	}
+}
+
+func TestRuntimeFailureCodes(t *testing.T) {
+	o, m := newOrigin(t)
+	for _, c := range []struct {
+		err  error
+		code string
+	}{{encoder.ErrNoPython, "no_python"}, {errors.New("pip exploded"), "runtime_failed"}} {
+		in := newInstaller(t, o)
+		in.Runtime = func(ctx context.Context, dir string, report func(encoder.Status)) error { return c.err }
+		p := runJob(t, in, m, Request{Dir: t.TempDir(), Choice: Choice{Pack: PackTrial}})
+		if p.State != JobFailed || p.Code != c.code {
+			t.Fatalf("%v: %+v", c.err, p)
+		}
+	}
+}
+
+func TestInstallRefusedWithoutPython(t *testing.T) {
+	o, _ := newOrigin(t)
+	s := NewServer(ServerConfig{
+		Web:        fstest.MapFS{"setup.html": {Data: []byte("x")}},
+		Source:     o.srv.URL + "/",
+		FindPython: func(ctx context.Context) (string, error) { return "", encoder.ErrNoPython },
+		Runtime:    func(ctx context.Context, dir string, report func(encoder.Status)) error { return nil },
+	})
+	s.SetAddr("127.0.0.1:6001")
+	deadline := time.Now().Add(5 * time.Second)
+	for {
+		_, checked := s.pythonState()
+		if checked && s.Manifest() != nil {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatal("not ready")
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	b, _ := json.Marshal(Request{Dir: t.TempDir(), Choice: Choice{Pack: PackTrial}})
+	req := httptest.NewRequest("POST", "/api/setup/install", bytes.NewReader(b))
+	req.Host = "127.0.0.1:6001"
+	req.Header.Set(localweb.TokenHeader, s.Token())
+	rec := httptest.NewRecorder()
+	s.Handler().ServeHTTP(rec, req)
+	if rec.Code != http.StatusBadRequest || !strings.Contains(rec.Body.String(), "no_python") {
+		t.Fatalf("%d %s", rec.Code, rec.Body.String())
 	}
 }

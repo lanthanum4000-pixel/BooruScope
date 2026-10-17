@@ -17,6 +17,10 @@
   let pickerMissing = false;
   let picking = false;
   let installError = null;
+  let removeArmed = false;
+  let removeTimer = 0;
+  let removing = false;
+  let removeNote = null;
 
   function t(key, vars) {
     let s = (I18N[lang] && I18N[lang][key]) ?? I18N.en[key] ?? key;
@@ -172,12 +176,39 @@
       else if (dirCheck.freeKnown && dirCheck.free < need) warn = t("setup.noSpace");
       else if (dirCheck.hasApp) { warn = t("setup.update"); infoOnly = true; }
     }
+    const canRemove = !!(dirCheck && dirCheck.hasApp);
+    $("removeRow").hidden = !canRemove && !removeNote;
+    $("remove").hidden = !canRemove;
+    $("remove").disabled = removing;
+    $("remove").classList.toggle("armed", removeArmed);
+    $("remove").textContent = removing ? t("setup.removing") : removeArmed ? t("setup.removeConfirm") : t("setup.remove");
+    const rn = $("removeNote");
+    rn.textContent = removeNote ? removeNote.text : canRemove ? t("setup.removeHint") : "";
+    rn.classList.toggle("error", !!(removeNote && removeNote.error));
+
     $("dirWarn").hidden = !warn;
     $("dirWarn").textContent = warn;
     $("dirWarn").classList.toggle("info", infoOnly);
 
+    const pyBox = $("pythonBox");
+    pyBox.textContent = "";
+    pyBox.className = "hint";
+    if (!state.pythonChecked) pyBox.textContent = t("setup.pyChecking");
+    else if (state.python) pyBox.textContent = t("setup.python", { v: state.python });
+    else {
+      pyBox.className = "warn";
+      pyBox.append(t("setup.noPython") + " ");
+      const b = document.createElement("button");
+      b.type = "button";
+      b.className = "link";
+      b.textContent = t("setup.retry");
+      b.addEventListener("click", () => api("/api/setup/reload", {}).finally(() => setTimeout(loadState, 600)));
+      pyBox.appendChild(b);
+    }
+
     let why = "";
-    if (!state.manifest) why = state.manifestLoading ? t("setup.why.manifest") : t("setup.manifestError", { source: state.source });
+    if (state.pythonChecked && !state.python) why = t("setup.noPython");
+    else if (!state.manifest) why = state.manifestLoading ? t("setup.why.manifest") : t("setup.manifestError", { source: state.source });
     else if (!pack(choice.pack)) why = t("setup.why.pack");
     else if (!$("dir").value.trim()) why = t("setup.why.dir");
     else if (!dirCheck) why = t("setup.why.checking");
@@ -189,6 +220,11 @@
     note.classList.toggle("error", !!installError);
     $("browse").disabled = picking;
     $("browse").textContent = picking ? t("setup.picking") : t("setup.browse");
+  }
+
+  function disarmRemove() {
+    removeArmed = false;
+    clearTimeout(removeTimer);
   }
 
   function errText(e) {
@@ -237,17 +273,29 @@
         list.appendChild(row);
         if (f.state !== "done" && f.state !== "skipped") remaining += f.size - f.done;
       }
-      $("progSpeed").textContent = p.speed > 0 ? t("setup.speed", { speed: bytes(p.speed), eta: duration(remaining / p.speed) }) : "";
+      $("progSpeed").textContent = p.speed > 0 && p.step === "download" ? t("setup.speed", { speed: bytes(p.speed), eta: duration(remaining / p.speed) }) : "";
+      const rt = p.runtime;
+      $("runtimeBox").hidden = !rt;
+      if (rt) {
+        const key = "enc." + rt.state;
+        let txt = I18N.en[key] ? t(key, { step: rt.step || "", device: rt.device || "" }) : rt.state;
+        const m = /(\d{1,3})%/.exec(rt.detail || "");
+        if (m && rt.state === "loading") txt += " " + m[1] + "%";
+        $("rtState").textContent = txt;
+        $("rtDetail").textContent = rt.detail || "";
+        $("rtDetail").title = rt.detail || "";
+        $("runtimeBox").classList.toggle("done", rt.state === "ready");
+      }
       return;
     }
     showView("doneView");
     const ok = p.state === "done";
     $("doneTitle").textContent = ok ? t("setup.done") : p.state === "cancelled" ? t("setup.cancel") : t("setup.failed");
     $("doneDesc").textContent = ok
-      ? t("setup.doneDesc", { dir: p.dir })
+      ? t("setup.doneDesc", { dir: p.dir, device: (p.runtime && p.runtime.device) || "cpu" })
       : p.state === "cancelled" ? t("setup.cancelled") : errText({ code: p.code, detail: p.error });
     $("launch").hidden = !ok;
-    $("back").hidden = ok;
+    $("back").hidden = false;
   }
 
   async function loadState() {
@@ -262,7 +310,7 @@
     }
     renderForm();
     renderProgress();
-    if (state.manifestLoading || state.progress.state === "running") {
+    if (state.manifestLoading || !state.pythonChecked || state.progress.state === "running") {
       clearTimeout(pollTimer);
       pollTimer = setTimeout(loadState, state.progress.state === "running" ? 500 : 800);
     }
@@ -273,7 +321,29 @@
       const b = e.target.closest("button[data-lang]");
       if (b) { lang = b.dataset.lang; applyLang(); }
     });
-    $("dir").addEventListener("input", () => { installError = null; scheduleCheck(); });
+    $("dir").addEventListener("input", () => { installError = null; removeNote = null; disarmRemove(); scheduleCheck(); });
+    $("remove").addEventListener("click", async () => {
+      if (!removeArmed) {
+        removeArmed = true;
+        clearTimeout(removeTimer);
+        removeTimer = setTimeout(() => { disarmRemove(); renderForm(); }, 4000);
+        renderForm();
+        return;
+      }
+      disarmRemove();
+      removing = true;
+      removeNote = null;
+      renderForm();
+      try {
+        const r = await api("/api/setup/uninstall", { dir: $("dir").value.trim() });
+        removeNote = { text: r.kept && r.kept.length ? t("setup.removedKept", { kept: r.kept.join(", ") }) : t("setup.removed") };
+      } catch (e) {
+        removeNote = { text: errText(e), error: true };
+      } finally {
+        removing = false;
+        await checkDir();
+      }
+    });
     $("browse").addEventListener("click", async () => {
       picking = true;
       installError = null;
