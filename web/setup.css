@@ -137,6 +137,44 @@ body.setup { overflow: auto; }
 #pythonBox .link { font-size: 12px; }
 @keyframes slide { 0% { margin-left: -30%; } 100% { margin-left: 100%; } }
 
+.carousel { margin-top: 18px; }
+.slides {
+  position: relative;
+  aspect-ratio: 16 / 9;
+  border-radius: 10px;
+  overflow: hidden;
+  background: #eef2f6;
+  border: 1px solid var(--line);
+}
+.slide {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  opacity: 0;
+  transform: scale(1.015);
+  transition: opacity 0.7s ease, transform 6s ease;
+}
+.slide.on { opacity: 1; transform: none; }
+.dots { display: flex; justify-content: center; gap: 8px; margin-top: 10px; }
+.dots button {
+  width: 9px;
+  height: 9px;
+  padding: 0;
+  border: 0;
+  border-radius: 999px;
+  background: var(--ink-3);
+  opacity: 0.5;
+  cursor: pointer;
+  transition: width 0.25s ease, opacity 0.25s ease, background 0.25s ease;
+}
+.dots button.on { width: 26px; opacity: 1; background: var(--accent); }
+.dots button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+@media (prefers-reduced-motion: reduce) {
+  .slide { transition: none; transform: none; }
+}
+
 @media (max-width: 560px) {
   .packs { grid-template-columns: 1fr; }
 }

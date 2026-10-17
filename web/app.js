@@ -14,6 +14,7 @@
     encDot: $("encDot"), encText: $("encText"), encRetry: $("encRetry"),
     libDot: $("libDot"), libText: $("libText"), msgline: $("msgline"),
     overlay: $("dropOverlay"), toast: $("toast"),
+    drift: $("drift"), driftScene: $("driftScene"),
   };
 
   const PAD = 8;
@@ -29,6 +30,10 @@
   let fx = null;
   let freshCards = false;
   let freshQuery = false;
+  const DRIFT = { keep: 30, perColumn: 9, minSources: 12, durations: [42, 49, 45, 53, 46], storeKey: "booruscope.driftRows" };
+  let driftRows = loadDriftRows();
+  let driftSignature = "";
+  let driftOn = false;
   const FX = { aber: 2, cols: 6, breakEvery: 250, liftMs: 980, liftShift: 3, liftScale: 1.03, glitchEvery: 3200, glitchFrac: 0.08, glitchShift: 14, grain: 0.02, wobble: 0.5, wobbleHz: 1, minMs: 900, fadeMs: 1300 };
   let idleTimer = 0;
   let liveRowCap = 4;
@@ -174,6 +179,7 @@
     el.encRetry.hidden = enc.state !== "error";
     idleDeadline = (state.idle && state.idle.unloadAt) || 0;
     tickCountdown();
+    updateDrift();
 
     const lib = state.library;
     el.libText.textContent = t("lib." + lib.state, { m: lib.variant, rows: (lib.rows || 0).toLocaleString() });
@@ -274,7 +280,7 @@
     card.dataset.i = String(i);
     card.innerHTML = '<div class="thumb"><img alt="" draggable="false"><span class="nothumb"></span></div><div class="name"></div><div class="estatus"></div>';
     const img = card.querySelector("img");
-    img.addEventListener("load", () => card.classList.add("loaded"));
+    img.addEventListener("load", () => { card.classList.add("loaded"); rememberDriftRow(r.row); });
     img.addEventListener("error", () => card.classList.add("failed"));
     img.src = withToken("/api/thumb/" + r.row);
     card.querySelector(".name").textContent = "#" + r.id;
@@ -380,6 +386,77 @@
     window.addEventListener("blur", closeMenu);
     window.addEventListener("resize", closeMenu);
     el.results.addEventListener("scroll", closeMenu, { passive: true });
+  }
+
+  function loadDriftRows() {
+    try {
+      const v = JSON.parse(localStorage.getItem(DRIFT.storeKey) || "[]");
+      return Array.isArray(v) ? v.filter((n) => Number.isInteger(n) && n >= 0).slice(0, DRIFT.keep) : [];
+    } catch (e) {
+      return [];
+    }
+  }
+
+  function rememberDriftRow(row) {
+    const i = driftRows.indexOf(row);
+    if (i === 0) return;
+    if (i > 0) driftRows.splice(i, 1);
+    driftRows.unshift(row);
+    if (driftRows.length > DRIFT.keep) driftRows.length = DRIFT.keep;
+    try { localStorage.setItem(DRIFT.storeKey, JSON.stringify(driftRows)); } catch (e) {}
+  }
+
+  function driftSources() {
+    const rows = driftRows.slice();
+    const total = (state && state.library && state.library.rows) || 0;
+    for (let tries = 0; rows.length < DRIFT.minSources && total > 0 && tries < 200; tries++) {
+      const r = Math.floor(Math.random() * total);
+      if (!rows.includes(r)) rows.push(r);
+    }
+    return rows;
+  }
+
+  function buildDrift() {
+    const rows = driftSources();
+    const signature = rows.join(",");
+    if (!rows.length) return false;
+    if (signature === driftSignature) return true;
+    driftSignature = signature;
+    const cols = Math.max(5, Math.min(10, Math.round(el.drift.parentElement.clientWidth / 150)));
+    el.driftScene.style.setProperty("--dw-cols", String(cols));
+    const frag = document.createDocumentFragment();
+    for (let c = 0; c < cols; c++) {
+      const col = div("drift-col" + (c % 2 ? " down" : ""));
+      const track = div("drift-track");
+      track.style.setProperty("--dw-duration", DRIFT.durations[c % DRIFT.durations.length] + "s");
+      track.style.setProperty("--dw-delay", -c * 3.7 + "s");
+      for (let copy = 0; copy < 2; copy++) {
+        const set = div("drift-set");
+        for (let r = 0; r < DRIFT.perColumn; r++) {
+          const img = new Image();
+          img.className = "drift-tile";
+          img.alt = "";
+          img.decoding = "async";
+          img.draggable = false;
+          img.src = withToken("/api/thumb/" + rows[(c + r * cols) % rows.length]);
+          img.addEventListener("error", () => { img.style.visibility = "hidden"; });
+          set.appendChild(img);
+        }
+        track.appendChild(set);
+      }
+      col.appendChild(track);
+      frag.appendChild(col);
+    }
+    el.driftScene.replaceChildren(frag);
+    return true;
+  }
+
+  function updateDrift() {
+    const cold = searching && !!state && state.encoder.state !== "ready";
+    if (cold && !driftOn) driftOn = buildDrift();
+    else if (!cold) driftOn = false;
+    el.drift.classList.toggle("ready", driftOn);
+    el.drift.classList.toggle("paused", !driftOn || document.hidden);
   }
 
   function div(cls) {
@@ -608,7 +685,8 @@
     render();
     idleDeadline = 0;
     tickCountdown();
-    if (state && state.encoder.state === "unloaded") setTimeout(poll, 300);
+    updateDrift();
+    if (state && state.encoder.state !== "ready") setTimeout(poll, 300);
     try {
       const res = await send(() => seq === searchSeq);
       if (seq !== searchSeq) return;
@@ -625,6 +703,7 @@
     } finally {
       if (seq === searchSeq) {
         searching = false;
+        updateDrift();
         render();
         fxEnd();
         poll();
@@ -792,6 +871,7 @@
 
   async function init() {
     heartbeat();
+    document.addEventListener("visibilitychange", updateDrift);
     wireMenu();
     wireDrop();
     wireControls();

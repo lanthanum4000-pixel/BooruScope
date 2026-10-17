@@ -88,6 +88,8 @@
     document.documentElement.lang = { zh: "zh-Hant", ja: "ja" }[lang] || "en";
     document.title = t("setup.title");
     document.querySelectorAll("[data-i18n]").forEach((n) => { n.textContent = t(n.dataset.i18n); });
+    document.querySelectorAll("[data-i18n-alt]").forEach((n) => { n.alt = t(n.dataset.i18nAlt); });
+    document.querySelectorAll("#dots button").forEach((b, k) => { b.setAttribute("aria-label", t("setup.slide" + (k + 1))); });
     $("lang").querySelectorAll("button").forEach((b) => {
       b.classList.toggle("active", b.dataset.lang === lang);
       b.setAttribute("aria-pressed", b.dataset.lang === lang ? "true" : "false");
@@ -415,8 +417,47 @@
     window.addEventListener("pagehide", () => navigator.sendBeacon("/api/bye?t=" + encodeURIComponent(TOKEN)));
   }
 
+  let slideIndex = 0;
+  let slideTimer = 0;
+  let slidePaused = false;
+
+  function showSlide(i) {
+    const slides = document.querySelectorAll("#carousel .slide");
+    const dots = document.querySelectorAll("#dots button");
+    slideIndex = (i + slides.length) % slides.length;
+    slides.forEach((s, k) => s.classList.toggle("on", k === slideIndex));
+    dots.forEach((d, k) => {
+      d.classList.toggle("on", k === slideIndex);
+      d.setAttribute("aria-selected", k === slideIndex ? "true" : "false");
+    });
+  }
+
+  function runCarousel() {
+    clearInterval(slideTimer);
+    slideTimer = setInterval(() => {
+      if (!slidePaused && !$("progressView").hidden && !document.hidden) showSlide(slideIndex + 1);
+    }, 6000);
+  }
+
+  function wireCarousel() {
+    const box = $("dots");
+    document.querySelectorAll("#carousel .slide").forEach((_, k) => {
+      const b = document.createElement("button");
+      b.type = "button";
+      b.setAttribute("role", "tab");
+      b.addEventListener("click", () => { showSlide(k); runCarousel(); });
+      box.appendChild(b);
+    });
+    const c = $("carousel");
+    c.addEventListener("mouseenter", () => { slidePaused = true; });
+    c.addEventListener("mouseleave", () => { slidePaused = false; });
+    showSlide(0);
+    runCarousel();
+  }
+
   heartbeat();
   wire();
+  wireCarousel();
   applyLang();
   loadState();
 })();

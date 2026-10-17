@@ -1,5 +1,7 @@
 # BooruScope
 
+![Drag a low-res image into BooruScope and get yande.re posts ranked by similarity](web/slides/feature-1.jpg)
+
 Find the booru post behind a low-resolution image. Drop a picture into BooruScope, get a wall of visually similar [yande.re](https://yande.re) posts, and double-click a card to open that post in your browser.
 
 BooruScope runs entirely on your computer. It embeds the dropped image with CLIP ViT-L/14, searches a downloaded product-quantized (PQ) index of yande.re posts, and can refine the ranking with an optional int8 vector file.
@@ -82,6 +84,7 @@ Logs go to `<home>/runtime/booruscope.log` (installer: `booruscope-setup.log` in
 ## Using it
 
 - Drop an image file from disk, or drag an image out of a browser window. BooruScope downloads linked images itself, sending the image's own origin as `Referer`.
+- While CLIP is still loading (first start, or after it was unloaded when idle), a slowly drifting wall of recently seen thumbnails plays behind the results.
 - The query image stays pinned in the top-left 2×2 cells with a 16×16 / 4×4 grid over it; results flow around it.
 - The magnifier on the query image opens Google Lens for it in your default browser. Images that came from a link are passed by URL; local files are uploaded to Lens from a small local page.
 - Right-click a result card and choose **Search with this image** to search again from that post's preview. Other right-click menus are disabled.
