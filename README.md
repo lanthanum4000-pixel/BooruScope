@@ -29,7 +29,7 @@ Go app ── local HTTP on 127.0.0.1 ── app window (Chrome or Edge in app m
 
 ## Data files
 
-Put the files into `<home>/data` (or point `-data` at another folder):
+The data files are published as a dataset on Hugging Face. Download `posts.bin`, one index file and, if you want reranking, `rerank_int8.bin`, then put them into `<home>/data` (or point `-data` at another folder):
 
 | File | Needed | Size (9.18 M posts) | Content |
 |---|---|---|---|
@@ -102,6 +102,10 @@ python -m unittest discover -s internal/encoder/py -p "test_*.py"
 ```
 
 The Go tests check the index readers, coarse search, int8 rerank and the HTTP API against `testdata/testpack/expected.json`.
+
+## License
+
+BooruScope's source code is released under the [MIT License](LICENSE). The CLIP model and the data files are distributed separately under their own terms.
 
 ## Model license
 
