@@ -1,0 +1,31 @@
+name: release
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  windows:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - run: go vet ./...
+      - run: go test ./...
+      - run: sh scripts/build-release.sh
+      - if: github.event_name == 'release'
+        run: gh release upload "$TAG" dist/BooruScope-Setup.exe --clobber
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.event.release.tag_name }}
+      - if: github.event_name != 'release'
+        uses: actions/upload-artifact@v4
+        with:
+          name: BooruScope-Setup
+          path: dist/BooruScope-Setup.exe

@@ -23,7 +23,7 @@ Go app ── local HTTP on 127.0.0.1 ── app window (Chrome or Edge in app m
 
 ## Requirements
 
-- Windows, macOS or Linux
+- Windows 10 or 11, 64-bit. Releases are built for Windows only; the code also builds on macOS and Linux, but those are untested.
 - Python 3.9 or newer on `PATH` (only used once, to create the virtual environment)
 - Google Chrome or Microsoft Edge
 - RAM: about 1.5 GB for the encoder; the index itself needs well under 100 MB
@@ -45,11 +45,11 @@ Index vectors were computed from each post's yande.re preview image, the same im
 
 ## Installing
 
-Run `BooruScope-Setup` (`BooruScope-Setup.exe` on Windows). It opens a small window where you choose:
+Download `BooruScope-Setup.exe` from the [latest release](https://github.com/lanthanum4000-pixel/BooruScope/releases/latest) and run it. The file is not code-signed, so Windows SmartScreen may say it protects your PC; choose **More info** → **Run anyway**. The installer opens a small window where you choose:
 
-- **Install location**: any folder you can write to. Default: `%LOCALAPPDATA%\Programs\BooruScope` on Windows, `~/Applications/BooruScope` on macOS, `~/.local/share/BooruScope` on Linux. Everything BooruScope stores, including the Python environment and the CLIP weights, stays in this folder.
+- **Install location**: any folder you can write to. Default: `%LOCALAPPDATA%\Programs\BooruScope`. Everything BooruScope stores, including the Python environment and the CLIP weights, stays in this folder.
 - **Data**: the full index (pick M64, M96 or M128, and optionally the int8 rerank file) or the 1,000-post trial pack.
-- **Shortcuts** (Windows): desktop and Start menu.
+- **Shortcuts**: desktop and Start menu.
 
 Before downloading any data, the installer creates the Python environment, installs PyTorch and Transformers, downloads the CLIP weights and encodes a test image, so a broken Python setup shows up first and BooruScope is ready to search the first time it opens. It checks for Python 3.9+ before it starts.
 
@@ -57,7 +57,7 @@ Downloads resume after an interruption and every file is checked against the SHA
 
 ## Running
 
-Start `booruscope` (`booruscope.exe`) in the install folder, or use the shortcut.
+Start `booruscope.exe` in the install folder, or use the shortcut.
 
 From source (Go 1.24+):
 

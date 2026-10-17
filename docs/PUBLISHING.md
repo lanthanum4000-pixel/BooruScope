@@ -61,8 +61,12 @@ hf upload Lanthanum4000/BooruScope <folder>/manifest.json manifest.json
 
 ## Building a release
 
+Releases are Windows only. Publishing a GitHub release (for example tag `v0.1.0`) runs the `release` workflow, which tests the code, builds `BooruScope-Setup.exe` and attaches it to the release. Running the workflow by hand builds the same file as a workflow artifact without touching any release.
+
+To build locally:
+
 ```
-scripts/build-release.sh 0.1.0
+scripts/build-release.sh
 ```
 
-This writes, for each platform, the program and a copy named `BooruScope-Setup` into `dist/`. The Windows build uses the GUI subsystem, so no console window opens.
+This writes `dist/BooruScope-Setup.exe`, built with the GUI subsystem so no console window opens. Users only need this one file: the installer copies itself into the install folder as `booruscope.exe`.
