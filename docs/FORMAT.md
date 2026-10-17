@@ -10,7 +10,7 @@ All integers and floats are little-endian. Row `i` in every file refers to the s
 | n | u32 |
 | rows | n × (post_id u32, md5 16 raw bytes) |
 
-The thumbnail URL is `https://img4.gelbooru.com/thumbnails/<md5[0:2]>/<md5[2:4]>/thumbnail_<md5>.jpg` with the MD5 in lowercase hex.
+The MD5 is always 16 raw bytes; it can end in `0x00`, so never read it as a string. The thumbnail URL is `https://assets.yande.re/data/preview/<md5[0:2]>/<md5[2:4]>/<md5>.jpg` with the MD5 in lowercase hex, and the post page is `https://yande.re/post/show/<post_id>`.
 
 ## `index_m64.pq` / `index_m96.pq` / `index_m128.pq`
 
@@ -34,7 +34,7 @@ The rotation is a PCA basis trained on a 200,000-post sample; eigenvectors are d
 | scale | f32[dim] |
 | rows | i8[n × dim], `round(v / scale)` clamped to ±127 |
 
-`v` is the unit-length CLIP vector. Every vector was computed from the post's Gelbooru thumbnail (the image at the thumbnail URL above), not from the sample or the original file. `scale[j]` is the 99.99th percentile of `|v_j|` over a sample, divided by 127.
+`v` is the unit-length CLIP vector. Every vector was computed from the post's yande.re preview (the image at the thumbnail URL above), not from the sample or the original file. `scale[j]` is the 99.99th percentile of `|v_j|` over a sample, divided by 127.
 
 ## Scoring
 

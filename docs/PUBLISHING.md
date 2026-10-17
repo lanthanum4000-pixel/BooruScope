@@ -35,9 +35,9 @@ It checks that every file in a pack has the same number of rows as its `posts.bi
   "format": "booruscope-manifest-v1",
   "packs": {
     "full": {
-      "rows": 9181936,
+      "rows": 449000,
       "files": [
-        { "name": "posts.bin", "path": "full/posts.bin", "size": 183638740, "sha256": "…" }
+        { "name": "posts.bin", "path": "full/posts.bin", "size": 8980012, "sha256": "…" }
       ]
     }
   }

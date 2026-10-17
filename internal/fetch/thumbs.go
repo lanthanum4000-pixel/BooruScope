@@ -58,7 +58,7 @@ func NewThumbs(maxBytes, concurrency int, f ThumbFetcher) *Thumbs {
 }
 
 func ThumbnailURL(md5hex string) *url.URL {
-	return &url.URL{Scheme: "https", Host: "img4.gelbooru.com", Path: "/thumbnails/" + md5hex[0:2] + "/" + md5hex[2:4] + "/thumbnail_" + md5hex + ".jpg"}
+	return &url.URL{Scheme: "https", Host: "assets.yande.re", Path: "/data/preview/" + md5hex[0:2] + "/" + md5hex[2:4] + "/" + md5hex + ".jpg"}
 }
 
 func (c *Thumbs) Get(ctx context.Context, u *url.URL) (Thumb, error) {
@@ -102,7 +102,7 @@ func (c *Thumbs) load(ctx context.Context, u *url.URL) (Thumb, error) {
 		return Thumb{}, ctx.Err()
 	}
 	defer func() { <-c.sem }()
-	data, ct, err := c.fetch(context.WithoutCancel(ctx), u, OriginOf(u))
+	data, ct, err := c.fetch(context.WithoutCancel(ctx), u, "")
 	if err != nil {
 		return Thumb{}, err
 	}

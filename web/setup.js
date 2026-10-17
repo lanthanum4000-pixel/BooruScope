@@ -5,12 +5,7 @@
   const I18N = window.BS_I18N;
   const $ = (id) => document.getElementById(id);
 
-  const QUALITY = {
-    64: { mem: 630, hit: 0.70, r10: 0.94 },
-    96: { mem: 910, hit: 0.92, r10: 0.94 },
-    128: { mem: 1190, hit: 0.94, r10: 0.95 },
-  };
-  const RECOMMENDED = 96;
+  const RECOMMENDED = 128;
 
   let lang = (navigator.language || "").toLowerCase().startsWith("zh") ? "zh" : "en";
   let state = null;
@@ -55,8 +50,6 @@
     return (sec / 3600).toFixed(1) + " h";
   }
 
-  function pct(x) { return Math.round(x * 100) + "%"; }
-
   function pack(name) { return state && state.manifest && state.manifest[name]; }
 
   function selectedFiles() {
@@ -89,7 +82,6 @@
     const p = pack("full");
     for (const m of [64, 96, 128]) {
       const size = p && p.files["index_m" + m + ".pq"];
-      const q = QUALITY[m];
       const lab = document.createElement("label");
       lab.className = "opt";
       lab.innerHTML = '<input type="radio" name="variant"><span><b></b><span class="tag" hidden></span><br><small></small></span>';
@@ -103,7 +95,7 @@
       tag.hidden = m !== RECOMMENDED;
       tag.textContent = t("setup.recommended");
       lab.querySelector("small").textContent = size
-        ? t("setup.variantLine", { size: bytes(size), mem: q.mem.toLocaleString() + " MB", hit: pct(q.hit) })
+        ? t("setup.variantLine", { size: bytes(size), mem: bytes(size + (p.files["posts.bin"] || 0)) })
         : t("setup.unavailable");
       box.appendChild(lab);
     }
@@ -131,7 +123,7 @@
 
     if (!full && trial && choice.pack === "full") choice.pack = "trial";
     if (full && !full.files["index_m" + choice.variant + ".pq"]) {
-      const v = [96, 128, 64].find((m) => full.files["index_m" + m + ".pq"]);
+      const v = [128, 96, 64].find((m) => full.files["index_m" + m + ".pq"]);
       if (v) choice.variant = v;
     }
     if (full && !full.files["rerank_int8.bin"]) choice.rerank = false;
@@ -153,7 +145,7 @@
     const rr = full && full.files["rerank_int8.bin"];
     $("rerank").disabled = !rr;
     $("rerank").checked = choice.rerank && !!rr;
-    $("rerankDesc").textContent = rr ? t("setup.rerankDesc", { size: bytes(rr), r10: pct(QUALITY[choice.variant].r10) }) : t("setup.unavailable");
+    $("rerankDesc").textContent = rr ? t("setup.rerankDesc", { size: bytes(rr) }) : t("setup.unavailable");
 
     $("optionsBox").hidden = !state.shortcuts;
     $("browse").hidden = pickerMissing;

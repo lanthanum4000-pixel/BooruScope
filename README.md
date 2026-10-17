@@ -1,10 +1,10 @@
 # BooruScope
 
-Find the booru post behind a low-resolution image. Drop a picture into BooruScope, get a wall of visually similar Gelbooru posts, and double-click a card to open that post in your browser.
+Find the booru post behind a low-resolution image. Drop a picture into BooruScope, get a wall of visually similar [yande.re](https://yande.re) posts, and double-click a card to open that post in your browser.
 
-BooruScope runs entirely on your computer. It embeds the dropped image with CLIP ViT-L/14, searches a downloaded product-quantized (PQ) index of Gelbooru posts, and can refine the ranking with an optional int8 vector file.
+BooruScope runs entirely on your computer. It embeds the dropped image with CLIP ViT-L/14, searches a downloaded product-quantized (PQ) index of yande.re posts, and can refine the ranking with an optional int8 vector file.
 
-> BooruScope is an independent project. It is not affiliated with or endorsed by Gelbooru.
+> BooruScope is an independent project. It is not affiliated with or endorsed by yande.re.
 
 ## How it works
 
@@ -24,30 +24,22 @@ Go app ── local HTTP on 127.0.0.1 ── app window (Chrome or Edge in app m
 - Windows, macOS or Linux
 - Python 3.9 or newer on `PATH` (only used once, to create the virtual environment)
 - Google Chrome or Microsoft Edge
-- RAM: about 1.5 GB for the encoder plus the index you pick (see below)
+- RAM: about 1.5 GB for the encoder; the index itself needs well under 100 MB
 - An NVIDIA GPU is optional. With `nvidia-smi` present the CUDA build of PyTorch is installed; otherwise the CPU build.
 
 ## Data files
 
 The data files are published at [huggingface.co/Lanthanum4000/BooruScope](https://huggingface.co/Lanthanum4000/BooruScope). The installer downloads them for you; to install by hand, put `posts.bin`, one index file and, if you want reranking, `rerank_int8.bin` into `<home>/data` (or point `-data` at another folder):
 
-| File | Needed | Size (9.18 M posts) | Content |
+| File | Needed | Size (about 449,000 posts) | Content |
 |---|---|---|---|
-| `posts.bin` | yes | ~0.18 GB | post ID and MD5 for every row |
-| `index_m64.pq` / `index_m96.pq` / `index_m128.pq` | at least one | ~0.59 / 0.88 / 1.18 GB | rotation, codebooks and PQ codes (kept in memory) |
-| `rerank_int8.bin` | optional | ~7.1 GB | int8 vectors for reranking (read from disk per query) |
+| `posts.bin` | yes | 9.0 MB | post ID and MD5 for every row |
+| `index_m64.pq` / `index_m96.pq` / `index_m128.pq` | at least one | 31.9 / 46.3 / 60.7 MB | rotation, codebooks and PQ codes (kept in memory) |
+| `rerank_int8.bin` | optional | 345.1 MB | int8 vectors for reranking (read from disk per query) |
 
 The file layout is documented in [`docs/FORMAT.md`](docs/FORMAT.md). A 1,000-post sample in the same format lives in [`testdata/testpack`](testdata/testpack).
 
-Measured quality on 50 random Gelbooru queries (ground truth: exact cosine ranking on the full-precision vectors):
-
-| Index | Memory | Coarse only: top-10 overlap / true #1 in top 10 | With int8 rerank: top-10 overlap / same #1 |
-|---|---|---|---|
-| M64 | 630 MB | 0.52 / 0.70 | 0.94 / 0.90 |
-| M96 | 910 MB | 0.64 / 0.92 | 0.94 / 0.90 |
-| M128 | 1,190 MB | 0.69 / 0.94 | 0.95 / 0.90 |
-
-Index vectors were computed from each post's Gelbooru thumbnail, the same image BooruScope shows on the result cards. These numbers use query vectors computed on the machine that built the index. Vectors computed on your machine (different decoder, CPU instead of GPU) will differ slightly; how much that costs in recall has not been measured yet.
+Index vectors were computed from each post's yande.re preview image, the same image BooruScope shows on the result cards. Quality at full scale has not been measured yet for the yande.re index. On the 1,000-post sample, the mean top-10 overlap with the exact ranking is 0.96 with int8 rerank and 0.78 / 0.80 / 0.83 for M64 / M96 / M128 without it. Query vectors computed on your machine (different decoder, CPU instead of GPU) will differ slightly from the ones used to build the index; how much that costs in recall has not been measured yet.
 
 ## Installing
 
@@ -90,7 +82,7 @@ Logs go to `<home>/runtime/booruscope.log` (installer: `booruscope-setup.log` in
 - Drop an image file from disk, or drag an image out of a browser window. BooruScope downloads linked images itself, sending the image's own origin as `Referer`.
 - The query image stays pinned in the top-left 2×2 cells; results flow around it.
 - **Per row** (3–6) resizes the grid. **Badge / Emoji** switches how the score is shown. **Index** picks M64/M96/M128. **int8 rerank** turns reranking on or off. **中文 / EN** switches the interface language.
-- Double-click a card to open `https://gelbooru.com/index.php?page=post&s=view&id=<id>` in your default browser.
+- Double-click a card to open `https://yande.re/post/show/<id>` in your default browser.
 
 Defaults: 60 results per search, 32 × 60 = 1,920 rerank candidates, 6 concurrent thumbnail downloads, 256 MB thumbnail memory cache (never written to disk), scores shown as cosine similarity with three decimals.
 
@@ -129,4 +121,4 @@ BooruScope does not ship model weights. On first start it downloads [`openai/cli
 
 ## Content
 
-The index only covers posts rated general or sensitive, and skips posts tagged `nude`, `nipples`, `pussy`, `topless` or `underboob`. Thumbnails are loaded from Gelbooru when results are shown and are never stored on disk.
+The index only covers posts rated safe (`s`), and skips posts tagged `nude`, `nipples`, `pussy`, `topless` or `underboob` and posts whose tags could not be read. Thumbnails are loaded from yande.re when results are shown and are never stored on disk.

@@ -14,7 +14,7 @@ import (
 
 func TestThumbnailURL(t *testing.T) {
 	got := ThumbnailURL("0123456789abcdef0123456789abcdef").String()
-	want := "https://img4.gelbooru.com/thumbnails/01/23/thumbnail_0123456789abcdef0123456789abcdef.jpg"
+	want := "https://assets.yande.re/data/preview/01/23/0123456789abcdef0123456789abcdef.jpg"
 	if got != want {
 		t.Fatalf("%s", got)
 	}
@@ -25,7 +25,7 @@ func TestThumbsCacheDedupAndEvict(t *testing.T) {
 	release := make(chan struct{})
 	f := func(ctx context.Context, u *url.URL, ref string) ([]byte, string, error) {
 		calls.Add(1)
-		if ref != "https://img.test" {
+		if ref != "" {
 			t.Errorf("referer %q", ref)
 		}
 		<-release

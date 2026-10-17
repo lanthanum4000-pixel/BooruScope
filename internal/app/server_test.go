@@ -241,7 +241,7 @@ func TestSearchURLUsesOriginRefererThenFallsBack(t *testing.T) {
 	}
 }
 
-func TestThumbProxyUsesMD5URLAndHostReferer(t *testing.T) {
+func TestThumbProxyUsesMD5URLWithoutReferer(t *testing.T) {
 	hs := newHarness(t)
 	eng := hs.srv.cfg.Library.Engine()
 	md5 := eng.Posts.MD5Hex(7)
@@ -249,8 +249,8 @@ func TestThumbProxyUsesMD5URLAndHostReferer(t *testing.T) {
 	if rec.Code != 200 || rec.Header().Get("Content-Type") != "image/png" {
 		t.Fatalf("thumb: %d", rec.Code)
 	}
-	want := "https://img4.gelbooru.com/thumbnails/" + md5[:2] + "/" + md5[2:4] + "/thumbnail_" + md5 + ".jpg"
-	if hs.fetches[0] != want || hs.referers[0] != "https://img4.gelbooru.com" {
+	want := "https://assets.yande.re/data/preview/" + md5[:2] + "/" + md5[2:4] + "/" + md5 + ".jpg"
+	if hs.fetches[0] != want || hs.referers[0] != "" {
 		t.Fatalf("fetched %q with referer %q", hs.fetches[0], hs.referers[0])
 	}
 	hs.do("GET", "/api/thumb/7?t="+hs.srv.Token(), nil, false)
@@ -269,7 +269,7 @@ func TestOpenBuildsPostURL(t *testing.T) {
 	if rec.Code != 200 || len(hs.opened) != 1 {
 		t.Fatalf("open: %d %v", rec.Code, hs.opened)
 	}
-	want := "https://gelbooru.com/index.php?page=post&s=view&id=" + jsonNum(eng.Posts.IDs[3])
+	want := "https://yande.re/post/show/" + jsonNum(eng.Posts.IDs[3])
 	if hs.opened[0] != want {
 		t.Fatalf("opened %q, want %q", hs.opened[0], want)
 	}

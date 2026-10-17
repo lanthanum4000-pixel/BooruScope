@@ -22,7 +22,7 @@ import (
 const (
 	ResultCount  = 60
 	queryKeep    = 8
-	PostURLTpl   = "https://gelbooru.com/index.php?page=post&s=view&id="
+	PostURLTpl   = "https://yande.re/post/show/"
 	encodeLimit  = 3 * time.Minute
 	fetchTimeout = 45 * time.Second
 )
