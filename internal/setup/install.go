@@ -71,6 +71,7 @@ type Request struct {
 
 type Installer struct {
 	Source   string
+	Token    string
 	Client   *http.Client
 	SelfExe  string
 	Shortcut func(exe, dir string) error
@@ -328,6 +329,7 @@ func (in *Installer) downloadOnce(ctx context.Context, i int, f File, part strin
 		return err
 	}
 	req.Header.Set("User-Agent", fetch.UserAgent)
+	authorize(req, in.Token)
 	if have > 0 {
 		req.Header.Set("Range", "bytes="+strconv.FormatInt(have, 10)+"-")
 	}

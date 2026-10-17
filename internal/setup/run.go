@@ -33,7 +33,11 @@ func Run(opt Options) error {
 	if r, err := filepath.EvalSymlinks(self); err == nil {
 		self = r
 	}
-	srv := NewServer(ServerConfig{Web: opt.Web, Source: opt.Source, SelfExe: self, Logf: opt.Logf})
+	token := HFToken()
+	if token != "" {
+		opt.Logf("setup: using a Hugging Face access token")
+	}
+	srv := NewServer(ServerConfig{Web: opt.Web, Source: opt.Source, SelfExe: self, Logf: opt.Logf, Token: token})
 	ln, err := net.Listen("tcp", net.JoinHostPort("127.0.0.1", strconv.Itoa(opt.Port)))
 	if err != nil {
 		return err

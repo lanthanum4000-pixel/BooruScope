@@ -111,6 +111,7 @@
     } else if (!state.manifest) {
       mbox.className = "warn";
       mbox.append(t("setup.manifestError", { source: state.source }) + " ");
+      if (state.manifestAuth && !state.hasToken) mbox.append(t("setup.manifestAuth") + " ");
       const b = document.createElement("button");
       b.type = "button";
       b.className = "link";

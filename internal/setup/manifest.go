@@ -111,12 +111,21 @@ func (m *Manifest) Select(c Choice) ([]File, error) {
 	return out, nil
 }
 
-func FetchManifest(ctx context.Context, source string) (*Manifest, error) {
+func statusCode(err error) (int, bool) {
+	var se *fetch.StatusError
+	if errors.As(err, &se) {
+		return se.Code, true
+	}
+	return 0, false
+}
+
+func FetchManifest(ctx context.Context, source, token string) (*Manifest, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, source+ManifestName, nil)
 	if err != nil {
 		return nil, err
 	}
 	req.Header.Set("User-Agent", fetch.UserAgent)
+	authorize(req, token)
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		return nil, err

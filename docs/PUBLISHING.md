@@ -48,7 +48,7 @@ Regenerate and upload the manifest whenever a data file changes; the installer r
 
 ## Uploading
 
-The repository must be public: the installer downloads without logging in.
+Make the repository public for release: users' installers download without logging in. While it is private, the installer still works on a machine where `hf auth login` was run (or `HF_TOKEN` is set); it then sends that token, and only to `huggingface.co`.
 
 ```
 pip install -U huggingface_hub

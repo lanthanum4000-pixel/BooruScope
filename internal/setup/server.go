@@ -20,6 +20,7 @@ type Server struct {
 	web    fs.FS
 	inst   *Installer
 	source string
+	token  string
 	logf   func(string, ...any)
 	quit   chan struct{}
 	pick   func(initial, prompt string) (string, error)
@@ -40,6 +41,7 @@ type ServerConfig struct {
 	Pick    func(initial, prompt string) (string, error)
 	Launch  func(exe, dir string) error
 	Client  *http.Client
+	Token   string
 }
 
 func NewServer(cfg ServerConfig) *Server {
@@ -60,7 +62,8 @@ func NewServer(cfg ServerConfig) *Server {
 		quit:   make(chan struct{}),
 		pick:   cfg.Pick,
 		launch: cfg.Launch,
-		inst:   &Installer{Source: cfg.Source, SelfExe: cfg.SelfExe, Shortcut: CreateShortcuts, Logf: cfg.Logf, Client: cfg.Client},
+		token:  cfg.Token,
+		inst:   &Installer{Source: cfg.Source, Token: cfg.Token, SelfExe: cfg.SelfExe, Shortcut: CreateShortcuts, Logf: cfg.Logf, Client: cfg.Client},
 	}
 	s.loadManifest()
 	return s
@@ -98,7 +101,7 @@ func (s *Server) loadManifest() {
 	go func() {
 		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 		defer cancel()
-		m, err := FetchManifest(ctx, s.source)
+		m, err := FetchManifest(ctx, s.source, s.token)
 		if err != nil {
 			s.logf("setup: manifest: %v", err)
 		}
@@ -136,15 +139,18 @@ type stateResp struct {
 	Source     string              `json:"source"`
 	Manifest   map[string]packInfo `json:"manifest,omitempty"`
 	ManErr     string              `json:"manifestError,omitempty"`
+	ManAuth    bool                `json:"manifestAuth,omitempty"`
+	HasToken   bool                `json:"hasToken"`
 	Loading    bool                `json:"manifestLoading"`
 	Progress   Progress            `json:"progress"`
 }
 
 func (s *Server) handleState(w http.ResponseWriter, r *http.Request) {
 	m, err, loading := s.manifestState()
-	out := stateResp{DefaultDir: DefaultDir(), OS: runtime.GOOS, Shortcuts: ShortcutsSupported(), Source: s.source, Loading: loading, Progress: s.inst.Progress()}
+	out := stateResp{DefaultDir: DefaultDir(), OS: runtime.GOOS, Shortcuts: ShortcutsSupported(), Source: s.source, Loading: loading, Progress: s.inst.Progress(), HasToken: s.token != ""}
 	if err != nil {
 		out.ManErr = err.Error()
+		out.ManAuth = IsAuthError(err)
 	}
 	if m != nil {
 		out.Manifest = map[string]packInfo{}
