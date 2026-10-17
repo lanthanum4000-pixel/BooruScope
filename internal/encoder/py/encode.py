@@ -23,7 +23,7 @@ class InputError(Exception):
 def to_8bit(im):
     if im.mode.startswith("I;16"):
         a = np.asarray(im, dtype=np.uint16) >> 8
-        return Image.fromarray(a.astype(np.uint8), "L")
+        return Image.fromarray(a.astype(np.uint8))
     if im.mode in ("I", "F"):
         raise InputError("unsupported bit depth: " + im.mode)
     return im

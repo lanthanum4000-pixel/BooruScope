@@ -47,7 +47,7 @@ class LoadTests(unittest.TestCase):
 
     def test_16bit_grey_keeps_high_byte(self):
         a = np.full((2, 2), 0xAB12, dtype=np.uint16)
-        im = Image.fromarray(a, "I;16")
+        im = Image.fromarray(a)
         rgb = encode.load_rgb(png_bytes(im))
         self.assertEqual(int(rgb[0, 0, 0]), 0xAB)
 
