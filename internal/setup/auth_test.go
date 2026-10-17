@@ -65,3 +65,13 @@ func TestAuthErrorDetection(t *testing.T) {
 		}
 	}
 }
+
+func TestEncodeCommand(t *testing.T) {
+	got := encodeCommand("ä'選")
+	if got != "5AAnAHiQ" {
+		t.Fatalf("%s", got)
+	}
+	if q := psQuote(`C:\it's 資料`); q != `'C:\it''s 資料'` {
+		t.Fatalf("%s", q)
+	}
+}

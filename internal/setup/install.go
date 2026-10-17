@@ -153,7 +153,13 @@ func (in *Installer) Cancel() {
 
 func (in *Installer) run(ctx context.Context, pack Pack, files []File, dir string, req Request) {
 	defer close(in.done)
+	if in.Logf != nil {
+		in.Logf("setup: installing %d files into %s", len(files), dir)
+	}
 	exe, err := in.install(ctx, pack, files, dir, req)
+	if err == nil && in.Logf != nil {
+		in.Logf("setup: installed %s", exe)
+	}
 	in.update(func(p *Progress) {
 		p.Speed = 0
 		switch {

@@ -3,6 +3,7 @@
 package setup
 
 import (
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -35,20 +36,35 @@ func DefaultDir() string {
 	return `C:\BooruScope`
 }
 
-func psQuote(s string) string { return "'" + strings.ReplaceAll(s, "'", "''") + "'" }
-
 func powershell(script string) ([]byte, error) {
-	cmd := exec.Command("powershell.exe", "-NoProfile", "-NonInteractive", "-STA", "-ExecutionPolicy", "Bypass", "-Command", "[Console]::OutputEncoding=[Text.Encoding]::UTF8; "+script)
-	return proc.Hide(cmd).Output()
+	full := "[Console]::OutputEncoding = [Text.Encoding]::UTF8\n" + script
+	cmd := exec.Command("powershell.exe", "-NoProfile", "-STA", "-ExecutionPolicy", "Bypass", "-EncodedCommand", encodeCommand(full))
+	var stderr strings.Builder
+	cmd.Stderr = &stderr
+	out, err := proc.Hide(cmd).Output()
+	if err != nil {
+		if ee, ok := err.(*exec.ExitError); ok && ee.ExitCode() == 2 {
+			return nil, err
+		}
+		if msg := strings.TrimSpace(stderr.String()); msg != "" {
+			return nil, fmt.Errorf("%w: %s", err, msg)
+		}
+	}
+	return out, err
 }
 
 func PickFolder(initial, prompt string) (string, error) {
-	script := "Add-Type -AssemblyName System.Windows.Forms; " +
-		"$o = New-Object System.Windows.Forms.Form -Property @{TopMost=$true; ShowInTaskbar=$false}; " +
-		"$d = New-Object System.Windows.Forms.FolderBrowserDialog; " +
-		"$d.Description = " + psQuote(prompt) + "; $d.ShowNewFolderButton = $true; " +
-		"$d.SelectedPath = " + psQuote(initial) + "; " +
-		"if ($d.ShowDialog($o) -eq [System.Windows.Forms.DialogResult]::OK) { $d.SelectedPath } else { exit 2 }"
+	script := "Add-Type -AssemblyName System.Windows.Forms\n" +
+		"[System.Windows.Forms.Application]::EnableVisualStyles()\n" +
+		"$o = New-Object System.Windows.Forms.Form\n" +
+		"$o.TopMost = $true; $o.ShowInTaskbar = $false; $o.FormBorderStyle = 'None'; $o.Opacity = 0; $o.StartPosition = 'CenterScreen'\n" +
+		"$o.Show(); $o.Activate()\n" +
+		"$d = New-Object System.Windows.Forms.FolderBrowserDialog\n" +
+		"$d.Description = " + psQuote(prompt) + "; $d.ShowNewFolderButton = $true\n" +
+		"$d.SelectedPath = " + psQuote(initial) + "\n" +
+		"$r = $d.ShowDialog($o)\n" +
+		"$o.Close()\n" +
+		"if ($r -eq [System.Windows.Forms.DialogResult]::OK) { $d.SelectedPath } else { exit 2 }"
 	out, err := powershell(script)
 	if err != nil {
 		if ee, ok := err.(*exec.ExitError); ok && ee.ExitCode() == 2 {
@@ -60,7 +76,7 @@ func PickFolder(initial, prompt string) (string, error) {
 }
 
 func CreateShortcuts(exe, dir string) error {
-	script := "$w = New-Object -ComObject WScript.Shell; " +
+	script := "$w = New-Object -ComObject WScript.Shell\n" +
 		"foreach ($f in @([Environment]::GetFolderPath('Desktop'), [Environment]::GetFolderPath('Programs'))) { " +
 		"$s = $w.CreateShortcut((Join-Path $f 'BooruScope.lnk')); " +
 		"$s.TargetPath = " + psQuote(exe) + "; $s.WorkingDirectory = " + psQuote(dir) + "; " +

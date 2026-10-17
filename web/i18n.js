@@ -110,7 +110,17 @@ window.BS_I18N = {
     "setup.err.download_failed": "A download failed. Check your connection and try again; it resumes where it stopped.",
     "setup.err.copy_failed": "Could not copy the program.",
     "setup.err.launch_failed": "Could not start BooruScope.",
-    "setup.err.generic": "Something went wrong."
+    "setup.err.generic": "Something went wrong.",
+    "setup.err.picker_failed": "The folder dialog could not be opened. Type the path instead.",
+    "setup.err.no_manifest": "The download list is not loaded yet.",
+    "setup.err.bad_choice": "That data option is not available.",
+    "setup.err.bad_dir": "That folder path is not valid.",
+    "setup.err.network": "The installer is not responding.",
+    "setup.picking": "Waiting for the folder dialog…",
+    "setup.why.manifest": "Waiting for the download list.",
+    "setup.why.pack": "This data option is not available.",
+    "setup.why.dir": "Enter an install location.",
+    "setup.why.checking": "Checking the folder…"
   },
   zh: {
     "app.title": "BooruScope",
@@ -223,6 +233,16 @@ window.BS_I18N = {
     "setup.err.download_failed": "下載失敗，請檢查網路後重試；會從中斷處繼續。",
     "setup.err.copy_failed": "無法複製程式檔。",
     "setup.err.launch_failed": "無法啟動 BooruScope。",
-    "setup.err.generic": "發生錯誤。"
+    "setup.err.generic": "發生錯誤。",
+    "setup.err.picker_failed": "無法開啟資料夾對話框，請直接輸入路徑。",
+    "setup.err.no_manifest": "下載清單還沒讀到。",
+    "setup.err.bad_choice": "這個資料選項無法使用。",
+    "setup.err.bad_dir": "資料夾路徑無效。",
+    "setup.err.network": "安裝程式沒有回應。",
+    "setup.picking": "等待資料夾對話框…",
+    "setup.why.manifest": "等待下載清單。",
+    "setup.why.pack": "這個資料選項無法使用。",
+    "setup.why.dir": "請輸入安裝位置。",
+    "setup.why.checking": "檢查資料夾中…"
   }
 };

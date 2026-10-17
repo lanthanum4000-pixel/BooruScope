@@ -15,6 +15,8 @@
   let checkTimer = 0;
   let pollTimer = 0;
   let pickerMissing = false;
+  let picking = false;
+  let installError = null;
 
   function t(key, vars) {
     let s = (I18N[lang] && I18N[lang][key]) ?? I18N.en[key] ?? key;
@@ -29,7 +31,12 @@
       opts.headers["Content-Type"] = "application/json";
       opts.body = JSON.stringify(body);
     }
-    const r = await fetch(path, opts);
+    let r;
+    try {
+      r = await fetch(path, opts);
+    } catch (e) {
+      throw { code: "network" };
+    }
     const data = await r.json().catch(() => null);
     if (!r.ok || (data && data.error)) throw { code: (data && data.error) || "generic", detail: data && data.detail };
     return data;
@@ -169,8 +176,24 @@
     $("dirWarn").textContent = warn;
     $("dirWarn").classList.toggle("info", infoOnly);
 
-    const blocked = !state.manifest || !pack(choice.pack) || !dirCheck || !dirCheck.writable || (dirCheck.freeKnown && dirCheck.free < need) || !$("dir").value.trim();
-    $("install").disabled = blocked;
+    let why = "";
+    if (!state.manifest) why = state.manifestLoading ? t("setup.why.manifest") : t("setup.manifestError", { source: state.source });
+    else if (!pack(choice.pack)) why = t("setup.why.pack");
+    else if (!$("dir").value.trim()) why = t("setup.why.dir");
+    else if (!dirCheck) why = t("setup.why.checking");
+    else if (!dirCheck.writable) why = t("setup.notWritable");
+    else if (dirCheck.freeKnown && dirCheck.free < need) why = t("setup.noSpace");
+    $("install").disabled = !!why;
+    const note = $("installNote");
+    note.textContent = installError ? errText(installError) : why;
+    note.classList.toggle("error", !!installError);
+    $("browse").disabled = picking;
+    $("browse").textContent = picking ? t("setup.picking") : t("setup.browse");
+  }
+
+  function errText(e) {
+    const key = "setup.err." + (e && e.code);
+    return (I18N.en[key] ? t(key) : t("setup.err.generic")) + (e && e.detail ? " (" + e.detail + ")" : "");
   }
 
   function scheduleCheck() {
@@ -222,7 +245,7 @@
     $("doneTitle").textContent = ok ? t("setup.done") : p.state === "cancelled" ? t("setup.cancel") : t("setup.failed");
     $("doneDesc").textContent = ok
       ? t("setup.doneDesc", { dir: p.dir })
-      : p.state === "cancelled" ? t("setup.cancelled") : t(I18N.en["setup.err." + p.code] ? "setup.err." + p.code : "setup.err.generic") + (p.error ? " (" + p.error + ")" : "");
+      : p.state === "cancelled" ? t("setup.cancelled") : errText({ code: p.code, detail: p.error });
     $("launch").hidden = !ok;
     $("back").hidden = ok;
   }
@@ -250,29 +273,37 @@
       const b = e.target.closest("button[data-lang]");
       if (b) { lang = b.dataset.lang; applyLang(); }
     });
-    $("dir").addEventListener("input", scheduleCheck);
+    $("dir").addEventListener("input", () => { installError = null; scheduleCheck(); });
     $("browse").addEventListener("click", async () => {
+      picking = true;
+      installError = null;
+      renderForm();
       try {
         const r = await api("/api/setup/browse", { dir: $("dir").value.trim(), prompt: t("setup.pickPrompt") });
         if (r && r.dir) { $("dir").value = r.dir; checkDir(); }
       } catch (e) {
-        if (e.code === "no_picker") { pickerMissing = true; renderForm(); }
+        if (e.code === "no_picker") pickerMissing = true;
+        else if (e.code !== "cancelled") installError = e;
+      } finally {
+        picking = false;
+        renderForm();
       }
     });
     document.querySelectorAll('input[name="pack"]').forEach((r) => r.addEventListener("change", () => { choice.pack = r.value; renderForm(); }));
     $("rerank").addEventListener("change", () => { choice.rerank = $("rerank").checked; renderForm(); });
     $("install").addEventListener("click", async () => {
       $("install").disabled = true;
+      installError = null;
       try {
         await api("/api/setup/install", { dir: $("dir").value.trim(), choice, shortcut: state.shortcuts && $("shortcut").checked });
       } catch (e) {
-        $("dirWarn").hidden = false;
-        $("dirWarn").textContent = t(I18N.en["setup.err." + e.code] ? "setup.err." + e.code : "setup.err.generic");
+        installError = e;
       }
-      loadState();
+      await loadState();
+      renderForm();
     });
     $("cancel").addEventListener("click", () => { $("cancel").disabled = true; api("/api/setup/cancel", {}).finally(() => { $("cancel").disabled = false; loadState(); }); });
-    $("back").addEventListener("click", () => { state.progress.state = "idle"; showView("formView"); checkDir(); });
+    $("back").addEventListener("click", () => { state.progress.state = "idle"; installError = null; showView("formView"); checkDir(); });
     $("launch").addEventListener("click", async () => {
       try {
         await api("/api/setup/launch", {});

@@ -104,6 +104,10 @@ func (s *Server) loadManifest() {
 		m, err := FetchManifest(ctx, s.source, s.token)
 		if err != nil {
 			s.logf("setup: manifest: %v", err)
+		} else {
+			for name, p := range m.Packs {
+				s.logf("setup: manifest: pack %s, %d rows, %d files", name, p.Rows, len(p.Files))
+			}
 		}
 		s.mu.Lock()
 		s.manifest, s.manErr, s.loading = m, err, false
@@ -184,6 +188,9 @@ func (s *Server) handleBrowse(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	dir, err := s.pick(nearestExisting(in.Dir), in.Prompt)
+	if err != nil && !errors.Is(err, ErrPickCancelled) {
+		s.logf("setup: folder dialog: %v", err)
+	}
 	switch {
 	case errors.Is(err, ErrPickCancelled):
 		localweb.WriteErr(w, http.StatusOK, "cancelled", "")
@@ -218,22 +225,27 @@ func (s *Server) handleInstall(w http.ResponseWriter, r *http.Request) {
 		localweb.WriteErr(w, http.StatusBadRequest, "bad_request", err.Error())
 		return
 	}
+	s.logf("setup: install requested: dir=%q pack=%s variant=%d rerank=%v", in.Dir, in.Choice.Pack, in.Choice.Variant, in.Choice.Rerank)
 	m := s.Manifest()
 	if m == nil {
+		s.logf("setup: install refused: no manifest")
 		localweb.WriteErr(w, http.StatusServiceUnavailable, "no_manifest", "")
 		return
 	}
 	c, err := CheckDir(in.Dir)
 	if err != nil {
+		s.logf("setup: install refused: %v", err)
 		localweb.WriteErr(w, http.StatusBadRequest, "bad_dir", err.Error())
 		return
 	}
 	if !c.Writable {
+		s.logf("setup: install refused: %s is not writable", c.Dir)
 		localweb.WriteErr(w, http.StatusBadRequest, "not_writable", c.Dir)
 		return
 	}
 	in.Dir = c.Dir
 	if err := s.inst.Start(m, in); err != nil {
+		s.logf("setup: install refused: %v", err)
 		localweb.WriteErr(w, http.StatusBadRequest, "bad_choice", err.Error())
 		return
 	}

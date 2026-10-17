@@ -109,6 +109,10 @@ body.setup { overflow: auto; }
   color: var(--ink-2);
 }
 #doneButtons { justify-content: flex-end; }
+.footer-text { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.note { font-size: 12px; color: var(--ink-2); }
+.note.error { color: var(--err); }
+.note:empty { display: none; }
 
 .file { margin: 10px 0; font-size: 12px; }
 .file-head { display: flex; justify-content: space-between; gap: 8px; margin-bottom: 4px; }

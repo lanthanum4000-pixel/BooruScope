@@ -1,9 +1,12 @@
 package setup
 
 import (
+	"encoding/base64"
 	"errors"
 	"os"
 	"path/filepath"
+	"strings"
+	"unicode/utf16"
 )
 
 var (
@@ -63,3 +66,15 @@ func CheckDir(dir string) (DirCheck, error) {
 	}
 	return c, nil
 }
+
+func encodeCommand(script string) string {
+	u := utf16.Encode([]rune(script))
+	b := make([]byte, 2*len(u))
+	for i, c := range u {
+		b[2*i] = byte(c)
+		b[2*i+1] = byte(c >> 8)
+	}
+	return base64.StdEncoding.EncodeToString(b)
+}
+
+func psQuote(s string) string { return "'" + strings.ReplaceAll(s, "'", "''") + "'" }
