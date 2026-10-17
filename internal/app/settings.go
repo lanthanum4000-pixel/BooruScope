@@ -7,21 +7,26 @@ import (
 )
 
 type Settings struct {
-	Lang       string `json:"lang"`
-	RowCap     int    `json:"rowCap"`
-	StatusMode string `json:"statusMode"`
-	Variant    int    `json:"variant"`
-	Rerank     bool   `json:"rerank"`
+	Lang        string `json:"lang"`
+	RowCap      int    `json:"rowCap"`
+	Variant     int    `json:"variant"`
+	Rerank      bool   `json:"rerank"`
+	IdleUnload  bool   `json:"idleUnload"`
+	IdleMinutes int    `json:"idleMinutes"`
+	Offline     bool   `json:"offline"`
 }
 
 const (
-	RowCapMin     = 3
-	RowCapMax     = 6
-	RowCapDefault = 4
+	RowCapMin          = 3
+	RowCapMax          = 6
+	RowCapDefault      = 4
+	IdleMinutesMin     = 1
+	IdleMinutesMax     = 1440
+	IdleMinutesDefault = 10
 )
 
 func DefaultSettings() Settings {
-	return Settings{RowCap: RowCapDefault, StatusMode: "badge", Rerank: true}
+	return Settings{RowCap: RowCapDefault, Rerank: true, IdleMinutes: IdleMinutesDefault, Offline: true}
 }
 
 func (s Settings) normalized() Settings {
@@ -31,8 +36,8 @@ func (s Settings) normalized() Settings {
 	if s.RowCap < RowCapMin || s.RowCap > RowCapMax {
 		s.RowCap = RowCapDefault
 	}
-	if s.StatusMode != "emoji" {
-		s.StatusMode = "badge"
+	if s.IdleMinutes < IdleMinutesMin || s.IdleMinutes > IdleMinutesMax {
+		s.IdleMinutes = IdleMinutesDefault
 	}
 	if s.Variant != 64 && s.Variant != 96 && s.Variant != 128 {
 		s.Variant = 0

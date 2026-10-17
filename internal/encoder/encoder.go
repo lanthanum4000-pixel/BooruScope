@@ -26,13 +26,14 @@ var assets embed.FS
 type State string
 
 const (
-	StateIdle    State = "idle"
-	StatePython  State = "python"
-	StateVenv    State = "venv"
-	StateInstall State = "install"
-	StateLoading State = "loading"
-	StateReady   State = "ready"
-	StateError   State = "error"
+	StateIdle     State = "idle"
+	StatePython   State = "python"
+	StateVenv     State = "venv"
+	StateInstall  State = "install"
+	StateLoading  State = "loading"
+	StateReady    State = "ready"
+	StateError    State = "error"
+	StateUnloaded State = "unloaded"
 )
 
 const Dim = 768
@@ -78,6 +79,7 @@ type Encoder struct {
 	logBuf []string
 	proc   *process
 	cancel context.CancelFunc
+	extra  []string
 
 	reqMu  sync.Mutex
 	nextID int64
@@ -183,7 +185,7 @@ func (e *Encoder) logLine(s string) {
 
 func (e *Encoder) Start() {
 	e.mu.Lock()
-	if e.st.State != StateIdle && e.st.State != StateError {
+	if e.st.State != StateIdle && e.st.State != StateError && e.st.State != StateUnloaded {
 		e.mu.Unlock()
 		return
 	}
@@ -214,7 +216,10 @@ func (e *Encoder) boot(ctx context.Context) error {
 	}
 	cmd := proc.Hide(exec.CommandContext(ctx, e.venvPython(), "-u", scriptPath, "--model", e.opt.Model, "--device", e.opt.Device))
 	cmd.Dir = scriptDir
-	cmd.Env = append(append(os.Environ(), e.opt.Env...), "PYTHONIOENCODING=utf-8", "PYTHONUNBUFFERED=1", "PYTHONNOUSERSITE=1", "HF_HUB_DISABLE_TELEMETRY=1")
+	e.mu.Lock()
+	extra := append([]string(nil), e.extra...)
+	e.mu.Unlock()
+	cmd.Env = append(append(append(os.Environ(), e.opt.Env...), extra...), "PYTHONIOENCODING=utf-8", "PYTHONUNBUFFERED=1", "PYTHONNOUSERSITE=1", "HF_HUB_DISABLE_TELEMETRY=1")
 	stdin, err := cmd.StdinPipe()
 	if err != nil {
 		return err
@@ -294,6 +299,21 @@ func (e *Encoder) lastLogLocked() string {
 		return "no output"
 	}
 	return e.logBuf[len(e.logBuf)-1]
+}
+
+func (e *Encoder) SetExtraEnv(env []string) {
+	e.mu.Lock()
+	e.extra = append([]string(nil), env...)
+	e.mu.Unlock()
+}
+
+func (e *Encoder) Unload() {
+	e.reqMu.Lock()
+	defer e.reqMu.Unlock()
+	e.Close()
+	e.mu.Lock()
+	e.st = Status{State: StateUnloaded}
+	e.mu.Unlock()
 }
 
 func (e *Encoder) Restart() {

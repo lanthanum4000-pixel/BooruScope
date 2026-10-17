@@ -30,7 +30,10 @@ const (
 type Encoder interface {
 	Status() encoder.Status
 	Encode(ctx context.Context, img []byte) ([]float32, error)
+	Start()
 	Restart()
+	Unload()
+	SetExtraEnv(env []string)
 }
 
 type Config struct {
@@ -42,16 +45,22 @@ type Config struct {
 	OpenURL      func(string) error
 	FetchImage   func(ctx context.Context, u *url.URL, referer string) ([]byte, string, error)
 	Logf         func(string, ...any)
+	Model        string
+	HFHome       string
+	Now          func() time.Time
 }
 
 type Server struct {
 	cfg   Config
 	guard *localweb.Guard
 
-	mu       sync.Mutex
-	settings Settings
-	queries  []storedQuery
-	qseq     int
+	mu         sync.Mutex
+	settings   Settings
+	queries    []storedQuery
+	qseq       int
+	lastActive time.Time
+	inflight   int
+	prevState  encoder.State
 }
 
 type storedQuery struct {
@@ -67,8 +76,15 @@ func New(cfg Config) *Server {
 	if cfg.Logf == nil {
 		cfg.Logf = func(string, ...any) {}
 	}
-	return &Server{cfg: cfg, guard: localweb.NewGuard(), settings: loadSettings(cfg.SettingsPath)}
+	if cfg.Now == nil {
+		cfg.Now = time.Now
+	}
+	s := &Server{cfg: cfg, guard: localweb.NewGuard(), settings: loadSettings(cfg.SettingsPath)}
+	s.lastActive = cfg.Now()
+	return s
 }
+
+func (s *Server) now() time.Time { return s.cfg.Now() }
 
 func (s *Server) Token() string { return s.guard.Token() }
 
@@ -106,6 +122,7 @@ func (s *Server) handleIndex(w http.ResponseWriter, r *http.Request) {
 
 type stateResp struct {
 	Encoder  encoder.Status `json:"encoder"`
+	Idle     IdleStatus     `json:"idle"`
 	Library  LibraryStatus  `json:"library"`
 	Settings Settings       `json:"settings"`
 	Results  int            `json:"resultCount"`
@@ -115,6 +132,7 @@ type stateResp struct {
 func (s *Server) handleState(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, stateResp{
 		Encoder:  s.cfg.Encoder.Status(),
+		Idle:     s.idleStatus(),
 		Library:  s.cfg.Library.Status(),
 		Settings: s.Settings(),
 		Results:  ResultCount,
@@ -138,6 +156,9 @@ func (s *Server) handleSettings(w http.ResponseWriter, r *http.Request) {
 	}
 	if in.Variant != prev.Variant {
 		s.cfg.Library.Load(in.Variant)
+	}
+	if in.IdleUnload != prev.IdleUnload || in.IdleMinutes != prev.IdleMinutes {
+		s.touch()
 	}
 	writeJSON(w, http.StatusOK, in)
 }
@@ -175,8 +196,10 @@ func (s *Server) search(w http.ResponseWriter, r *http.Request, img []byte, ct s
 		writeErr(w, http.StatusServiceUnavailable, "no_index", string(s.cfg.Library.Status().State))
 		return
 	}
-	if st := s.cfg.Encoder.Status(); st.State != encoder.StateReady {
-		writeErr(w, http.StatusServiceUnavailable, "encoder_not_ready", string(st.State))
+	s.beginWork()
+	defer s.endWork()
+	if err := s.ensureEncoder(r.Context()); err != nil {
+		writeErr(w, http.StatusServiceUnavailable, "encoder_not_ready", string(s.cfg.Encoder.Status().State))
 		return
 	}
 	qid := s.storeQuery(img, ct)
@@ -350,6 +373,7 @@ func (s *Server) handleOpen(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleRestart(w http.ResponseWriter, r *http.Request) {
+	s.cfg.Encoder.SetExtraEnv(s.encoderEnv())
 	s.cfg.Encoder.Restart()
 	writeJSON(w, http.StatusOK, s.cfg.Encoder.Status())
 }

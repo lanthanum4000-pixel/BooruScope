@@ -116,6 +116,8 @@ func main() {
 		SettingsPath: filepath.Join(absHome, "settings.json"),
 		OpenURL:      browser.OpenDefault,
 		Logf:         logf,
+		Model:        *model,
+		HFHome:       encoder.HFHome(runtimeDir),
 	})
 
 	ln, err := net.Listen("tcp", fmt.Sprintf("127.0.0.1:%d", *port))
@@ -133,7 +135,10 @@ func main() {
 	logf("BooruScope at %s (data: %s)", appURL, *dataDir)
 
 	lib.Load(srv.Settings().Variant)
-	enc.Start()
+	srv.StartEncoder()
+	idleCtx, stopIdle := context.WithCancel(context.Background())
+	defer stopIdle()
+	go srv.RunIdle(idleCtx)
 
 	stop := make(chan os.Signal, 1)
 	signal.Notify(stop, os.Interrupt, syscall.SIGTERM)

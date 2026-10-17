@@ -189,3 +189,23 @@ func TestPipProgressParsing(t *testing.T) {
 		t.Fatalf("%+v", st)
 	}
 }
+
+func TestUnloadAndReload(t *testing.T) {
+	e := fakeEncoder(t)
+	defer e.Close()
+	e.Start()
+	waitState(t, e, StateReady)
+	e.Unload()
+	if st := e.Status(); st.State != StateUnloaded {
+		t.Fatalf("%+v", st)
+	}
+	if _, err := e.Encode(context.Background(), []byte("x")); !errors.Is(err, ErrNotReady) {
+		t.Fatalf("err %v", err)
+	}
+	e.SetExtraEnv([]string{"HF_HUB_OFFLINE=1"})
+	e.Start()
+	waitState(t, e, StateReady)
+	if _, err := e.Encode(context.Background(), []byte("again")); err != nil {
+		t.Fatal(err)
+	}
+}

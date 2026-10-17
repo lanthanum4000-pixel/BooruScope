@@ -7,7 +7,9 @@
   const el = {
     results: $("results"), spacer: $("spacer"), empty: $("empty"),
     missingHelp: $("missingHelp"), missingDir: $("missingDir"),
-    rowCap: $("rowCap"), rowCapVal: $("rowCapVal"), statusMode: $("statusMode"),
+    rowCap: $("rowCap"), rowCapVal: $("rowCapVal"),
+    idleUnload: $("idleUnload"), idleMinutes: $("idleMinutes"), idleCountdown: $("idleCountdown"), idleBox: $("idleBox"),
+    offline: $("offline"), offlineBox: $("offlineBox"),
     variant: $("variant"), rerank: $("rerank"), rerankText: $("rerankText"), lang: $("lang"),
     encDot: $("encDot"), encText: $("encText"), encRetry: $("encRetry"),
     libDot: $("libDot"), libText: $("libText"), msgline: $("msgline"),
@@ -22,7 +24,9 @@
   const Q_COLS = 2;
   const BUFFER_ROWS = 2;
 
-  let settings = { lang: "", rowCap: 4, statusMode: "badge", variant: 0, rerank: true };
+  let settings = { lang: "", rowCap: 4, variant: 0, rerank: true, idleUnload: false, idleMinutes: 10, offline: true };
+  let idleDeadline = 0;
+  let idleTimer = 0;
   let liveRowCap = 4;
   let lang = "en";
   let state = null;
@@ -108,14 +112,29 @@
     if (qtile) qtile.querySelector(".qlabel").textContent = t("query.label");
   }
 
-  function applyMode() {
-    const emoji = settings.statusMode === "emoji";
-    el.results.classList.toggle("emoji-mode", emoji);
-    el.statusMode.querySelectorAll("button").forEach((b) => {
-      const on = b.dataset.mode === settings.statusMode;
-      b.classList.toggle("active", on);
-      b.setAttribute("aria-pressed", on ? "true" : "false");
-    });
+  function applyIdle() {
+    el.idleUnload.checked = !!settings.idleUnload;
+    el.idleMinutes.value = String(settings.idleMinutes || 10);
+    el.idleMinutes.disabled = !settings.idleUnload;
+    el.offline.checked = !!settings.offline;
+    el.idleBox.title = t("idle.title");
+    el.offlineBox.title = t("offline.title");
+    tickCountdown();
+  }
+
+  function clock(ms) {
+    const sec = Math.max(0, Math.ceil(ms / 1000));
+    const m = Math.floor(sec / 60), s = sec % 60;
+    return m + ":" + String(s).padStart(2, "0");
+  }
+
+  function tickCountdown() {
+    clearTimeout(idleTimer);
+    if (!settings.idleUnload || !idleDeadline) { el.idleCountdown.textContent = ""; return; }
+    const left = idleDeadline - Date.now();
+    el.idleCountdown.textContent = t("idle.remaining", { t: clock(left) });
+    if (left <= 0) { setTimeout(poll, 1500); return; }
+    idleTimer = setTimeout(tickCountdown, 1000);
   }
 
   function applyRowCap(n) {
@@ -141,8 +160,10 @@
     }
     el.encText.textContent = encText;
     el.encText.title = enc.detail || "";
-    el.encDot.className = "dot " + (enc.state === "ready" ? "ok" : enc.state === "error" ? "err" : "busy");
+    el.encDot.className = "dot " + (enc.state === "ready" ? "ok" : enc.state === "error" ? "err" : enc.state === "unloaded" ? "" : "busy");
     el.encRetry.hidden = enc.state !== "error";
+    idleDeadline = (state.idle && state.idle.unloadAt) || 0;
+    tickCountdown();
 
     const lib = state.library;
     el.libText.textContent = t("lib." + lib.state, { m: lib.variant, rows: (lib.rows || 0).toLocaleString() });
@@ -178,7 +199,7 @@
   function busy() {
     if (!state) return true;
     const e = state.encoder.state;
-    return (e !== "ready" && e !== "error") || state.library.state === "loading";
+    return (e !== "ready" && e !== "error" && e !== "unloaded") || state.library.state === "loading";
   }
 
   async function poll() {
@@ -198,7 +219,7 @@
     const cols = liveRowCap;
     const cardW = Math.max(MIN_CARD, Math.floor(innerW / cols));
     const thumb = cardW - 2 * PAD;
-    const infoH = settings.statusMode === "emoji" ? 56 : 30;
+    const infoH = 50;
     return { cols, cardW, thumb, cardH: thumb + infoH + 2 * PAD };
   }
 
@@ -221,9 +242,9 @@
   }
 
   function tier(score) {
-    if (score >= 0.93) return { cls: "high", emoji: "🎯", key: "score.high" };
-    if (score >= 0.85) return { cls: "mid", emoji: "✨", key: "score.mid" };
-    return { cls: "low", emoji: "🔍", key: "score.low" };
+    if (score >= 0.93) return { cls: "high", key: "score.high" };
+    if (score >= 0.85) return { cls: "mid", key: "score.mid" };
+    return { cls: "low", key: "score.low" };
   }
 
   function fillCardText(card, r) {
@@ -231,9 +252,7 @@
     const tr = tier(r.score);
     const s = r.score.toFixed(3);
     card.title = t("card.title", { id: r.id });
-    card.querySelector(".badge").textContent = s;
-    card.querySelector(".badge").className = "badge " + tr.cls;
-    card.querySelector(".estatus").textContent = tr.emoji + " " + s + " " + t(tr.key);
+    card.querySelector(".estatus").textContent = s + " · " + t(tr.key);
     card.querySelector(".estatus").className = "estatus " + tr.cls;
     card.querySelector(".nothumb").textContent = t("card.noThumb");
   }
@@ -243,7 +262,7 @@
     const card = document.createElement("div");
     card.className = "card";
     card.dataset.i = String(i);
-    card.innerHTML = '<div class="thumb"><img alt="" draggable="false"><span class="nothumb"></span><span class="badge"></span></div><div class="name"></div><div class="estatus"></div>';
+    card.innerHTML = '<div class="thumb"><img alt="" draggable="false"><span class="nothumb"></span></div><div class="name"></div><div class="estatus"></div>';
     const img = card.querySelector("img");
     img.addEventListener("load", () => card.classList.add("loaded"));
     img.addEventListener("error", () => card.classList.add("failed"));
@@ -340,6 +359,9 @@
     el.results.scrollTop = 0;
     setMessage({ running: true });
     render();
+    idleDeadline = 0;
+    tickCountdown();
+    if (state && state.encoder.state === "unloaded") setTimeout(poll, 300);
     try {
       const res = await send();
       if (seq !== searchSeq) return;
@@ -355,6 +377,7 @@
       if (seq === searchSeq) {
         searching = false;
         render();
+        poll();
       }
     }
   }
@@ -438,12 +461,21 @@
       settings.rowCap = applyRowCap(el.rowCap.value);
       saveSettings();
     });
-    el.statusMode.addEventListener("click", (e) => {
-      const b = e.target.closest("button[data-mode]");
-      if (!b || b.dataset.mode === settings.statusMode) return;
-      settings.statusMode = b.dataset.mode;
-      applyMode();
-      render();
+    el.idleUnload.addEventListener("change", () => {
+      settings.idleUnload = el.idleUnload.checked;
+      applyIdle();
+      saveSettings();
+      setTimeout(poll, 200);
+    });
+    el.idleMinutes.addEventListener("change", () => {
+      const n = Math.max(1, Math.min(1440, parseInt(el.idleMinutes.value, 10) || 10));
+      settings.idleMinutes = n;
+      applyIdle();
+      saveSettings();
+      setTimeout(poll, 200);
+    });
+    el.offline.addEventListener("change", () => {
+      settings.offline = el.offline.checked;
       saveSettings();
     });
     el.variant.addEventListener("change", () => {
@@ -487,7 +519,7 @@
     } catch (e) {}
     lang = settings.lang || ((navigator.language || "").toLowerCase().startsWith("zh") ? "zh" : "en");
     applyRowCap(settings.rowCap);
-    applyMode();
+    applyIdle();
     applyLang();
     render();
     poll();

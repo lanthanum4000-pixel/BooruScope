@@ -117,6 +117,17 @@ body {
 .ctl { display: flex; align-items: center; gap: 6px; }
 .ctl input[type="range"] { width: 90px; accent-color: var(--accent); }
 .ctl output { min-width: 52px; color: var(--ink); font-variant-numeric: tabular-nums; }
+.ctl input[type="number"] {
+  font: inherit;
+  width: 58px;
+  padding: 3px 6px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--panel);
+  color: var(--ink);
+}
+.ctl input[type="number"]:disabled { opacity: 0.5; }
+.countdown { min-width: 44px; color: var(--accent); font-variant-numeric: tabular-nums; }
 .ctl select {
   font: inherit;
   padding: 4px 6px;
@@ -126,6 +137,7 @@ body {
   color: var(--ink);
 }
 .chk input { accent-color: var(--accent); margin: 0; }
+.idle .chk { display: flex; align-items: center; gap: 6px; cursor: pointer; }
 
 .seg {
   display: flex;
@@ -236,22 +248,6 @@ body {
 }
 .card.failed .nothumb { display: flex; }
 
-.badge {
-  position: absolute;
-  top: 6px;
-  right: 6px;
-  padding: 2px 7px;
-  border-radius: 999px;
-  font-size: 11px;
-  font-weight: 700;
-  color: #fff;
-  font-variant-numeric: tabular-nums;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.25);
-}
-.badge.high { background: var(--high); }
-.badge.mid { background: var(--mid); }
-.badge.low { background: var(--low); }
-
 .name {
   margin-top: 6px;
   font-size: 12px;
@@ -263,7 +259,7 @@ body {
 }
 
 .estatus {
-  display: none;
+  display: block;
   margin-top: 4px;
   font-size: 12px;
   white-space: nowrap;
@@ -275,8 +271,7 @@ body {
 .estatus.mid { color: var(--mid); }
 .estatus.low { color: var(--low); }
 
-.emoji-mode .badge { display: none; }
-.emoji-mode .estatus { display: block; }
+
 
 .qtile {
   position: absolute;

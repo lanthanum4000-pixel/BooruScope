@@ -29,14 +29,48 @@ var packDir = filepath.Join("..", "..", "testdata", "testpack")
 var pngBytes = []byte("\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR")
 
 type fakeEncoder struct {
-	vec   []float32
-	calls int
-	state encoder.State
+	mu       sync.Mutex
+	vec      []float32
+	calls    int
+	state    encoder.State
+	starts   int
+	unloads  int
+	env      []string
+	loadTime time.Duration
 }
 
-func (f *fakeEncoder) Status() encoder.Status { return encoder.Status{State: f.state} }
-func (f *fakeEncoder) Restart()               {}
+func (f *fakeEncoder) Status() encoder.Status {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return encoder.Status{State: f.state}
+}
+func (f *fakeEncoder) set(st encoder.State) { f.mu.Lock(); f.state = st; f.mu.Unlock() }
+func (f *fakeEncoder) Restart()             {}
+func (f *fakeEncoder) SetExtraEnv(env []string) {
+	f.mu.Lock()
+	f.env = env
+	f.mu.Unlock()
+}
+func (f *fakeEncoder) Unload() {
+	f.mu.Lock()
+	f.unloads++
+	f.state = encoder.StateUnloaded
+	f.mu.Unlock()
+}
+func (f *fakeEncoder) Start() {
+	f.mu.Lock()
+	f.starts++
+	f.state = encoder.StateLoading
+	d := f.loadTime
+	f.mu.Unlock()
+	go func() {
+		time.Sleep(d)
+		f.set(encoder.StateReady)
+	}()
+}
 func (f *fakeEncoder) Encode(ctx context.Context, img []byte) ([]float32, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
 	f.calls++
 	return f.vec, nil
 }
@@ -198,7 +232,7 @@ func TestSearchImageReranked(t *testing.T) {
 func TestSearchWithoutRerank(t *testing.T) {
 	hs := newHarness(t)
 	exp := loadExpected(t)
-	rec := hs.do("PUT", "/api/settings", strings.NewReader(`{"rowCap":5,"statusMode":"emoji","variant":128,"rerank":false,"lang":"zh"}`), true)
+	rec := hs.do("PUT", "/api/settings", strings.NewReader(`{"rowCap":5,"variant":128,"rerank":false,"lang":"zh","idleUnload":true,"idleMinutes":3,"offline":false}`), true)
 	if rec.Code != 200 {
 		t.Fatalf("settings: %d", rec.Code)
 	}
@@ -212,7 +246,7 @@ func TestSearchWithoutRerank(t *testing.T) {
 		}
 	}
 	saved := loadSettings(hs.srv.cfg.SettingsPath)
-	if saved.RowCap != 5 || saved.StatusMode != "emoji" || saved.Lang != "zh" || saved.Rerank {
+	if saved.RowCap != 5 || saved.Lang != "zh" || saved.Rerank || !saved.IdleUnload || saved.IdleMinutes != 3 || saved.Offline {
 		t.Fatalf("saved %+v", saved)
 	}
 }
@@ -220,7 +254,7 @@ func TestSearchWithoutRerank(t *testing.T) {
 func TestSearchRejectsNonImage(t *testing.T) {
 	hs := newHarness(t)
 	rec := hs.do("POST", "/api/search/image", strings.NewReader("<html>nope</html>"), true)
-	if rec.Code != http.StatusUnprocessableEntity || hs.enc.calls != 0 {
+	if rec.Code != http.StatusUnprocessableEntity || hs.enc.Status().State != encoder.StateReady || hs.enc.calls != 0 {
 		t.Fatalf("got %d, calls %d", rec.Code, hs.enc.calls)
 	}
 }
@@ -285,7 +319,7 @@ func jsonNum(v uint32) string {
 
 func TestEncoderNotReady(t *testing.T) {
 	hs := newHarness(t)
-	hs.enc.state = encoder.StateInstall
+	hs.enc.set(encoder.StateError)
 	rec := hs.do("POST", "/api/search/image", bytes.NewReader(pngBytes), true)
 	if rec.Code != http.StatusServiceUnavailable || !strings.Contains(rec.Body.String(), "encoder_not_ready") {
 		t.Fatalf("got %d %s", rec.Code, rec.Body.String())
@@ -297,5 +331,96 @@ func TestLibraryMissing(t *testing.T) {
 	lib.Load(0)
 	if st := lib.Status(); st.State != LibMissing {
 		t.Fatalf("state %s", st.State)
+	}
+}
+
+type fakeClock struct {
+	mu sync.Mutex
+	t  time.Time
+}
+
+func (c *fakeClock) now() time.Time { c.mu.Lock(); defer c.mu.Unlock(); return c.t }
+func (c *fakeClock) add(d time.Duration) {
+	c.mu.Lock()
+	c.t = c.t.Add(d)
+	c.mu.Unlock()
+}
+
+func TestIdleUnloadCountsDownOnlyWhileIdle(t *testing.T) {
+	hs := newHarness(t)
+	clk := &fakeClock{t: time.Unix(1_000_000, 0)}
+	hs.srv.cfg.Now = clk.now
+	hs.do("PUT", "/api/settings", strings.NewReader(`{"rowCap":4,"idleUnload":true,"idleMinutes":2,"rerank":true}`), true)
+	hs.srv.idleTick()
+	if at := hs.srv.idleStatus().UnloadAt; at != clk.now().Add(2*time.Minute).UnixMilli() {
+		t.Fatalf("unloadAt %d", at)
+	}
+	clk.add(119 * time.Second)
+	hs.srv.idleTick()
+	if hs.enc.unloads != 0 {
+		t.Fatal("unloaded early")
+	}
+	hs.srv.beginWork()
+	clk.add(5 * time.Minute)
+	hs.srv.idleTick()
+	if hs.enc.unloads != 0 || hs.srv.idleStatus().UnloadAt != 0 {
+		t.Fatal("countdown ran during a search")
+	}
+	hs.srv.endWork()
+	clk.add(119 * time.Second)
+	hs.srv.idleTick()
+	if hs.enc.unloads != 0 {
+		t.Fatal("countdown did not restart after the search")
+	}
+	clk.add(time.Second)
+	hs.srv.idleTick()
+	if hs.enc.unloads != 1 || hs.enc.Status().State != encoder.StateUnloaded {
+		t.Fatalf("not unloaded: %d %s", hs.enc.unloads, hs.enc.Status().State)
+	}
+	if hs.srv.idleStatus().UnloadAt != 0 {
+		t.Fatal("countdown shown while unloaded")
+	}
+}
+
+func TestIdleUnloadDisabled(t *testing.T) {
+	hs := newHarness(t)
+	clk := &fakeClock{t: time.Unix(1_000_000, 0)}
+	hs.srv.cfg.Now = clk.now
+	clk.add(48 * time.Hour)
+	hs.srv.idleTick()
+	if hs.enc.unloads != 0 || hs.srv.idleStatus().UnloadAt != 0 {
+		t.Fatal("unloaded while disabled")
+	}
+}
+
+func TestSearchReloadsUnloadedEncoder(t *testing.T) {
+	hs := newHarness(t)
+	hs.enc.loadTime = 200 * time.Millisecond
+	hs.enc.Unload()
+	out := decodeSearch(t, hs.do("POST", "/api/search/image", bytes.NewReader(pngBytes), true))
+	if len(out.Results) != ResultCount || hs.enc.starts != 1 {
+		t.Fatalf("starts %d, results %d", hs.enc.starts, len(out.Results))
+	}
+}
+
+func TestOfflineEnvOnlyWhenModelCached(t *testing.T) {
+	hs := newHarness(t)
+	hf := t.TempDir()
+	hs.srv.cfg.HFHome = hf
+	hs.srv.StartEncoder()
+	if len(hs.enc.env) != 0 {
+		t.Fatalf("offline env without a cached model: %v", hs.enc.env)
+	}
+	snap := filepath.Join(hf, "hub", "models--openai--clip-vit-large-patch14", "snapshots", "abc")
+	os.MkdirAll(snap, 0o755)
+	os.WriteFile(filepath.Join(snap, "config.json"), []byte("{}"), 0o644)
+	hs.srv.StartEncoder()
+	if strings.Join(hs.enc.env, " ") != "HF_HUB_OFFLINE=1 TRANSFORMERS_OFFLINE=1" {
+		t.Fatalf("env %v", hs.enc.env)
+	}
+	hs.do("PUT", "/api/settings", strings.NewReader(`{"rowCap":4,"offline":false,"rerank":true}`), true)
+	hs.srv.StartEncoder()
+	if len(hs.enc.env) != 0 {
+		t.Fatalf("offline env while disabled: %v", hs.enc.env)
 	}
 }

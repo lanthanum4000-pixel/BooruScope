@@ -20,10 +20,6 @@
       <input type="range" id="rowCap" min="3" max="6" step="1">
       <output id="rowCapVal"></output>
     </label>
-    <div class="seg" id="statusMode" role="group">
-      <button type="button" data-mode="badge" data-i18n="mode.badge"></button>
-      <button type="button" data-mode="emoji" data-i18n="mode.emoji"></button>
-    </div>
     <label class="ctl">
       <span data-i18n="variant.label"></span>
       <select id="variant"></select>
@@ -31,6 +27,16 @@
     <label class="ctl chk">
       <input type="checkbox" id="rerank">
       <span id="rerankText"></span>
+    </label>
+    <span class="ctl idle" id="idleBox">
+      <label class="chk"><input type="checkbox" id="idleUnload"><span data-i18n="idle.label"></span></label>
+      <input type="number" id="idleMinutes" min="1" max="1440" step="1">
+      <span data-i18n="idle.minutes"></span>
+      <span class="countdown" id="idleCountdown"></span>
+    </span>
+    <label class="ctl chk" id="offlineBox">
+      <input type="checkbox" id="offline">
+      <span data-i18n="offline.label"></span>
     </label>
     <div class="seg" id="lang" role="group">
       <button type="button" data-lang="zh">中文</button>

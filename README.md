@@ -83,10 +83,12 @@ Logs go to `<home>/runtime/booruscope.log` (installer: `booruscope-setup.log` in
 
 - Drop an image file from disk, or drag an image out of a browser window. BooruScope downloads linked images itself, sending the image's own origin as `Referer`.
 - The query image stays pinned in the top-left 2×2 cells; results flow around it.
-- **Per row** (3–6) resizes the grid. **Badge / Emoji** switches how the score is shown. **Index** picks M64/M96/M128. **int8 rerank** turns reranking on or off. **中文 / EN** switches the interface language.
+- **Per row** (3–6) resizes the grid. **Index** picks M64/M96/M128. **int8 rerank** turns reranking on or off. **中文 / EN** switches the interface language.
+- **Unload when idle** (off by default, 10 minutes): while no search runs, a countdown is shown; at zero CLIP is unloaded to free memory, and the next search loads it again automatically.
+- **Offline start** (on by default): once the model is downloaded, CLIP loads without checking Hugging Face for updates. It applies the next time CLIP loads.
 - Double-click a card to open `https://yande.re/post/show/<id>` in your default browser.
 
-Defaults: 60 results per search, 32 × 60 = 1,920 rerank candidates, 6 concurrent thumbnail downloads, 256 MB thumbnail memory cache (never written to disk), scores shown as cosine similarity with three decimals.
+Defaults: 60 results per search, 32 × 60 = 1,920 rerank candidates, 6 concurrent thumbnail downloads, 256 MB thumbnail memory cache (never written to disk), scores shown under each card as cosine similarity with three decimals.
 
 ## Search details
 
