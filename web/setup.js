@@ -61,6 +61,12 @@
     return (sec / 3600).toFixed(1) + " h";
   }
 
+  function clock(sec) {
+    sec = Math.max(0, Math.floor(sec));
+    const m = Math.floor(sec / 60), s = sec % 60;
+    return m + ":" + String(s).padStart(2, "0");
+  }
+
   function pack(name) { return state && state.manifest && state.manifest[name]; }
 
   function selectedFiles() {
@@ -281,6 +287,20 @@
         let txt = I18N.en[key] ? t(key, { step: rt.step || "", device: rt.device || "" }) : rt.state;
         const m = /(\d{1,3})%/.exec(rt.detail || "");
         if (m && rt.state === "loading") txt += " " + m[1] + "%";
+        const bar = $("rtBar");
+        const downloading = rt.state === "install" && rt.phase === "download" && rt.total > 0;
+        const unpacking = rt.state === "install" && rt.phase === "unpack";
+        if (downloading) {
+          txt += " · " + t("setup.rt.download", { done: bytes(rt.done), total: bytes(rt.total), pct: Math.floor((100 * rt.done) / rt.total) + "%" });
+          bar.classList.remove("indet");
+          bar.style.width = Math.min(100, (100 * rt.done) / rt.total) + "%";
+        } else {
+          bar.classList.add("indet");
+          bar.style.width = "";
+        }
+        if (unpacking) txt += " · " + t("setup.rt.unpack", { elapsed: clock((Date.now() - rt.since) / 1000) });
+        $("rtHint").hidden = !unpacking;
+        $("rtHint").textContent = t("setup.rt.unpackHint");
         $("rtState").textContent = txt;
         $("rtDetail").textContent = rt.detail || "";
         $("rtDetail").title = rt.detail || "";

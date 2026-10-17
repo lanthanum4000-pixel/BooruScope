@@ -130,6 +130,7 @@ body.setup { overflow: auto; }
 .file.done .bar-fill, .file.skipped .bar-fill { background: var(--ok); }
 .file.verifying .bar-fill { animation: pulse 1.2s ease-in-out infinite; }
 .file[hidden] { display: none; }
+#rtHint[hidden] { display: none; }
 .bar-fill.indet { width: 30%; animation: slide 1.4s ease-in-out infinite; }
 .file.done .bar-fill.indet { width: 100%; animation: none; }
 .mono { font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; font-size: 11px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }

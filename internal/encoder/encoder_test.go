@@ -12,6 +12,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"strings"
 	"testing"
 	"time"
 )
@@ -165,6 +166,26 @@ func TestVerifyWithoutPython(t *testing.T) {
 		t.Fatalf("err %v", err)
 	}
 	if st := e.Status(); st.State != StateError || st.Code != "no_python" {
+		t.Fatalf("%+v", st)
+	}
+}
+
+func TestPipProgressParsing(t *testing.T) {
+	e := New(Options{Dir: t.TempDir()})
+	e.setState(StateInstall, "torch")
+	e.pumpLines(strings.NewReader("Collecting torch\nDownloading torch-2.9.0-cp312-win_amd64.whl (2900.0 MB)\nProgress 0 of 3000\nProgress 1500 of 3000\n"), true)
+	st := e.Status()
+	if st.Phase != PhaseDownload || st.Done != 1500 || st.Total != 3000 || st.Step != "torch" || st.Since == 0 {
+		t.Fatalf("%+v", st)
+	}
+	for _, l := range e.Log() {
+		if strings.HasPrefix(l, "Progress") {
+			t.Fatalf("progress line logged: %q", l)
+		}
+	}
+	e.pumpLines(strings.NewReader("Progress 3000 of 3000\nInstalling collected packages: mpmath, sympy, torch\n"), true)
+	st = e.Status()
+	if st.Phase != PhaseUnpack || st.Done != 0 || !strings.HasPrefix(st.Detail, "Installing collected") {
 		t.Fatalf("%+v", st)
 	}
 }

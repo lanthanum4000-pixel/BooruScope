@@ -46,10 +46,19 @@ var (
 type Status struct {
 	State  State  `json:"state"`
 	Step   string `json:"step,omitempty"`
+	Phase  string `json:"phase,omitempty"`
+	Since  int64  `json:"since,omitempty"`
+	Done   int64  `json:"done,omitempty"`
+	Total  int64  `json:"total,omitempty"`
 	Code   string `json:"code,omitempty"`
 	Detail string `json:"detail,omitempty"`
 	Device string `json:"device,omitempty"`
 }
+
+const (
+	PhaseDownload = "download"
+	PhaseUnpack   = "unpack"
+)
 
 type Options struct {
 	Dir        string
@@ -115,7 +124,26 @@ func (e *Encoder) Log() []string {
 
 func (e *Encoder) setState(s State, step string) {
 	e.mu.Lock()
-	e.st = Status{State: s, Step: step, Device: e.st.Device}
+	e.st = Status{State: s, Step: step, Device: e.st.Device, Since: time.Now().UnixMilli()}
+	e.mu.Unlock()
+}
+
+func (e *Encoder) setPhase(phase string) {
+	e.mu.Lock()
+	if e.st.Phase != phase && e.st.State != StateReady && e.st.State != StateError {
+		e.st.Phase, e.st.Since, e.st.Done, e.st.Total = phase, time.Now().UnixMilli(), 0, 0
+	}
+	e.mu.Unlock()
+}
+
+func (e *Encoder) setProgress(done, total int64) {
+	e.mu.Lock()
+	if e.st.State != StateReady && e.st.State != StateError {
+		if e.st.Phase != PhaseDownload {
+			e.st.Phase, e.st.Since = PhaseDownload, time.Now().UnixMilli()
+		}
+		e.st.Done, e.st.Total = done, total
+	}
 	e.mu.Unlock()
 }
 

@@ -11,7 +11,9 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"runtime"
+	"strconv"
 	"strings"
 
 	"github.com/lanthanum4000-pixel/BooruScope/internal/proc"
@@ -121,8 +123,8 @@ func (e *Encoder) ensureVenv(ctx context.Context) error {
 	}
 	e.setState(StateInstall, "pip")
 	py := e.venvPython()
-	pip := []string{"-m", "pip", "install", "--disable-pip-version-check", "--progress-bar", "off"}
-	if err := e.runLogged(ctx, py, append(pip, "--upgrade", "pip")...); err != nil {
+	pip := []string{"-m", "pip", "install", "--disable-pip-version-check", "--progress-bar", "raw"}
+	if err := e.runLogged(ctx, py, "-m", "pip", "install", "--disable-pip-version-check", "--progress-bar", "off", "--upgrade", "pip"); err != nil {
 		return fmt.Errorf("upgrade pip: %w", err)
 	}
 	e.setState(StateInstall, "torch")
@@ -170,6 +172,8 @@ func (e *Encoder) runLogged(ctx context.Context, name string, args ...string) er
 	return err
 }
 
+var pipProgress = regexp.MustCompile(`^Progress (\d+) of (\d+)$`)
+
 func scanCRLF(data []byte, atEOF bool) (int, []byte, error) {
 	if i := bytes.IndexAny(data, "\r\n"); i >= 0 {
 		return i + 1, data[:i], nil
@@ -189,7 +193,16 @@ func (e *Encoder) pumpLines(r io.Reader, detail bool) {
 		if line == "" {
 			continue
 		}
+		if m := pipProgress.FindStringSubmatch(line); m != nil {
+			done, _ := strconv.ParseInt(m[1], 10, 64)
+			total, _ := strconv.ParseInt(m[2], 10, 64)
+			e.setProgress(done, total)
+			continue
+		}
 		e.logLine(line)
+		if strings.HasPrefix(line, "Installing collected packages") {
+			e.setPhase(PhaseUnpack)
+		}
 		if detail {
 			e.setDetail(line)
 		}

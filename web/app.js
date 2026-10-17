@@ -137,6 +137,7 @@
       encText = I18N.en[encKey] ? t(encKey, { step: enc.step || "", device: enc.device || "" }) : enc.state;
       const pct = /(\d{1,3})%/.exec(enc.detail || "");
       if (pct && enc.state === "loading") encText += " " + pct[1] + "%";
+      if (enc.state === "install" && enc.phase === "download" && enc.total > 0) encText += " " + Math.floor((100 * enc.done) / enc.total) + "%";
     }
     el.encText.textContent = encText;
     el.encText.title = enc.detail || "";
