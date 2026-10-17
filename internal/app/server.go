@@ -53,6 +53,7 @@ type Config struct {
 type Server struct {
 	cfg   Config
 	guard *localweb.Guard
+	life  *localweb.Lifetime
 
 	mu         sync.Mutex
 	settings   Settings
@@ -79,12 +80,14 @@ func New(cfg Config) *Server {
 	if cfg.Now == nil {
 		cfg.Now = time.Now
 	}
-	s := &Server{cfg: cfg, guard: localweb.NewGuard(), settings: loadSettings(cfg.SettingsPath)}
+	s := &Server{cfg: cfg, guard: localweb.NewGuard(), life: localweb.NewLifetime(nil), settings: loadSettings(cfg.SettingsPath)}
 	s.lastActive = cfg.Now()
 	return s
 }
 
 func (s *Server) now() time.Time { return s.cfg.Now() }
+
+func (s *Server) Lifetime() *localweb.Lifetime { return s.life }
 
 func (s *Server) Token() string { return s.guard.Token() }
 
@@ -108,6 +111,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /api/thumb/{row}", s.handleThumb)
 	mux.HandleFunc("POST /api/open", s.handleOpen)
 	mux.HandleFunc("POST /api/encoder/restart", s.handleRestart)
+	s.life.Register(mux)
 	return s.guard.Wrap(mux)
 }
 

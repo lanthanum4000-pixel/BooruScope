@@ -12,6 +12,7 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
+	"runtime/debug"
 	"strings"
 	"syscall"
 	"time"
@@ -70,6 +71,7 @@ func main() {
 		if f, err := os.Create(filepath.Join(os.TempDir(), "booruscope-setup.log")); err == nil {
 			defer f.Close()
 			logger.SetOutput(io.MultiWriter(f, os.Stderr))
+			debug.SetCrashOutput(f, debug.CrashOptions{})
 		}
 		src := *source
 		if !strings.HasSuffix(src, "/") {
@@ -97,6 +99,7 @@ func main() {
 	if f, err := os.Create(filepath.Join(runtimeDir, "booruscope.log")); err == nil {
 		defer f.Close()
 		logger.SetOutput(io.MultiWriter(f, os.Stderr))
+		debug.SetCrashOutput(f, debug.CrashOptions{})
 	}
 	enc := encoder.New(encoder.Options{
 		Dir:        runtimeDir,
@@ -140,32 +143,33 @@ func main() {
 	defer stopIdle()
 	go srv.RunIdle(idleCtx)
 
-	stop := make(chan os.Signal, 1)
-	signal.Notify(stop, os.Interrupt, syscall.SIGTERM)
-	windowClosed := make(chan struct{})
+	life := srv.Lifetime()
 	if !*noWindow {
 		if b, err := browser.Find(*browserPath); err == nil {
+			t0 := time.Now()
 			cmd, err := browser.LaunchApp(b, appURL, filepath.Join(runtimeDir, "browser-profile"))
 			if err != nil {
 				logf("window: %v", err)
+				life.NoBrowserProcess()
 			} else {
 				logf("window: %s (%s)", b.Kind, b.Path)
 				go func() {
 					cmd.Wait()
-					close(windowClosed)
+					ran := time.Since(t0)
+					logf("window: browser process exited after %v", ran.Round(time.Millisecond))
+					life.BrowserExited(ran)
 				}()
 			}
 		} else {
 			logf("window: %v; opening the default browser instead", err)
 			browser.OpenDefault(appURL)
+			life.NoBrowserProcess()
 		}
 	}
 
-	select {
-	case <-stop:
-	case <-windowClosed:
-	}
-	logf("shutting down")
+	sigCtx, stopSig := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stopSig()
+	logf("shutting down: %s", life.Wait(sigCtx))
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	httpSrv.Shutdown(ctx)

@@ -405,6 +405,14 @@
     $("close").addEventListener("click", () => { api("/api/setup/quit", {}).finally(() => window.close()); });
   }
 
+  function heartbeat() {
+    const ping = () => fetch("/api/ping", { method: "POST", headers: { "X-BooruScope-Token": TOKEN } }).catch(() => {});
+    ping();
+    setInterval(ping, 4000);
+    window.addEventListener("pagehide", () => navigator.sendBeacon("/api/bye?t=" + encodeURIComponent(TOKEN)));
+  }
+
+  heartbeat();
   wire();
   applyLang();
   loadState();

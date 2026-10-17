@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/lanthanum4000-pixel/BooruScope/internal/browser"
+	"github.com/lanthanum4000-pixel/BooruScope/internal/localweb"
 )
 
 type Options struct {
@@ -52,34 +53,42 @@ func Run(opt Options) error {
 	url := "http://" + ln.Addr().String() + "/"
 	opt.Logf("BooruScope Setup at %s", url)
 
-	closed := make(chan struct{})
+	life := srv.Lifetime()
+	go func() {
+		<-srv.Quit()
+		life.Quit()
+	}()
 	if !opt.NoWindow {
 		if b, err := browser.Find(opt.BrowserPath); err == nil {
 			profile, _ := os.MkdirTemp("", "booruscope-setup-")
+			t0 := time.Now()
 			cmd, err := browser.LaunchApp(b, url, profile)
 			if err != nil {
 				opt.Logf("window: %v", err)
+				life.NoBrowserProcess()
 			} else {
+				opt.Logf("window: %s (%s)", b.Kind, b.Path)
 				go func() {
 					cmd.Wait()
-					os.RemoveAll(profile)
-					close(closed)
+					ran := time.Since(t0)
+					opt.Logf("window: browser process exited after %v", ran.Round(time.Millisecond))
+					life.BrowserExited(ran)
+					if ran >= localweb.HandoffWindow {
+						os.RemoveAll(profile)
+					}
 				}()
 			}
 		} else {
 			opt.Logf("window: %v; opening the default browser instead", err)
 			browser.OpenDefault(url)
+			life.NoBrowserProcess()
 		}
 	}
-	stop := make(chan os.Signal, 1)
-	signal.Notify(stop, os.Interrupt, syscall.SIGTERM)
-	select {
-	case <-stop:
-	case <-closed:
-	case <-srv.Quit():
-	}
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
+	opt.Logf("setup: shutting down: %s", life.Wait(ctx))
 	srv.Installer().Cancel()
-	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	sctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
-	return httpSrv.Shutdown(ctx)
+	return httpSrv.Shutdown(sctx)
 }

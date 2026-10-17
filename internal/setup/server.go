@@ -18,6 +18,7 @@ import (
 
 type Server struct {
 	guard  *localweb.Guard
+	life   *localweb.Lifetime
 	web    fs.FS
 	inst   *Installer
 	source string
@@ -75,6 +76,7 @@ func NewServer(cfg ServerConfig) *Server {
 	}
 	s := &Server{
 		guard:  localweb.NewGuard(),
+		life:   localweb.NewLifetime(nil),
 		web:    cfg.Web,
 		source: cfg.Source,
 		logf:   cfg.Logf,
@@ -126,12 +128,13 @@ func LaunchApp(exe, dir string) error {
 	return cmd.Process.Release()
 }
 
-func (s *Server) SetAddr(addr string)   { s.guard.SetAddr(addr) }
-func (s *Server) Quit() <-chan struct{} { return s.quit }
-func (s *Server) Installer() *Installer { return s.inst }
-func (s *Server) Manifest() *Manifest   { s.mu.Lock(); defer s.mu.Unlock(); return s.manifest }
-func (s *Server) requestQuit()          { s.quitOnce.Do(func() { close(s.quit) }) }
-func (s *Server) Token() string         { return s.guard.Token() }
+func (s *Server) SetAddr(addr string)          { s.guard.SetAddr(addr) }
+func (s *Server) Quit() <-chan struct{}        { return s.quit }
+func (s *Server) Installer() *Installer        { return s.inst }
+func (s *Server) Manifest() *Manifest          { s.mu.Lock(); defer s.mu.Unlock(); return s.manifest }
+func (s *Server) Lifetime() *localweb.Lifetime { return s.life }
+func (s *Server) requestQuit()                 { s.quitOnce.Do(func() { close(s.quit) }) }
+func (s *Server) Token() string                { return s.guard.Token() }
 func (s *Server) manifestState() (*Manifest, error, bool) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -177,6 +180,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("POST /api/setup/launch", s.handleLaunch)
 	mux.HandleFunc("POST /api/setup/uninstall", s.handleUninstall)
 	mux.HandleFunc("POST /api/setup/quit", s.handleQuit)
+	s.life.Register(mux)
 	return s.guard.Wrap(mux)
 }
 
