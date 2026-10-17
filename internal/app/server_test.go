@@ -432,3 +432,27 @@ func TestSettingsAcceptJapanese(t *testing.T) {
 		}
 	}
 }
+
+func TestFetchThenSearchStoredQuery(t *testing.T) {
+	hs := newHarness(t)
+	rec := hs.do("POST", "/api/fetch", strings.NewReader(`{"url":"https://img.example.org/a.png"}`), true)
+	var f struct {
+		Query string `json:"query"`
+	}
+	if rec.Code != 200 || json.Unmarshal(rec.Body.Bytes(), &f) != nil || f.Query == "" {
+		t.Fatalf("fetch %d %s", rec.Code, rec.Body.String())
+	}
+	if hs.enc.calls != 0 {
+		t.Fatal("fetch should not encode")
+	}
+	if img := hs.do("GET", "/api/query/"+f.Query, nil, true); img.Code != 200 {
+		t.Fatalf("query image %d", img.Code)
+	}
+	out := decodeSearch(t, hs.do("POST", "/api/search/query", strings.NewReader(`{"query":"`+f.Query+`"}`), true))
+	if out.Query != f.Query || len(out.Results) != ResultCount {
+		t.Fatalf("%+v", out)
+	}
+	if rec := hs.do("POST", "/api/search/query", strings.NewReader(`{"query":"q999"}`), true); rec.Code != http.StatusNotFound {
+		t.Fatalf("unknown query %d", rec.Code)
+	}
+}

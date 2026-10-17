@@ -107,6 +107,8 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("PUT /api/settings", s.handleSettings)
 	mux.HandleFunc("POST /api/search/image", s.handleSearchImage)
 	mux.HandleFunc("POST /api/search/url", s.handleSearchURL)
+	mux.HandleFunc("POST /api/fetch", s.handleFetchURL)
+	mux.HandleFunc("POST /api/search/query", s.handleSearchQuery)
 	mux.HandleFunc("GET /api/query/{id}", s.handleQueryImage)
 	mux.HandleFunc("GET /api/thumb/{row}", s.handleThumb)
 	mux.HandleFunc("POST /api/open", s.handleOpen)
@@ -195,6 +197,10 @@ func (s *Server) storeQuery(data []byte, ct string) string {
 }
 
 func (s *Server) search(w http.ResponseWriter, r *http.Request, img []byte, ct string) {
+	s.searchAs(w, r, img, ct, "")
+}
+
+func (s *Server) searchAs(w http.ResponseWriter, r *http.Request, img []byte, ct, qid string) {
 	eng := s.cfg.Library.Engine()
 	if eng == nil {
 		writeErr(w, http.StatusServiceUnavailable, "no_index", string(s.cfg.Library.Status().State))
@@ -206,7 +212,9 @@ func (s *Server) search(w http.ResponseWriter, r *http.Request, img []byte, ct s
 		writeErr(w, http.StatusServiceUnavailable, "encoder_not_ready", string(s.cfg.Encoder.Status().State))
 		return
 	}
-	qid := s.storeQuery(img, ct)
+	if qid == "" {
+		qid = s.storeQuery(img, ct)
+	}
 	ctx, cancel := context.WithTimeout(r.Context(), encodeLimit)
 	defer cancel()
 	t0 := time.Now()
@@ -262,18 +270,18 @@ func refererFor(u *url.URL) string {
 	return fetch.OriginOf(u) + "/"
 }
 
-func (s *Server) handleSearchURL(w http.ResponseWriter, r *http.Request) {
+func (s *Server) fetchURL(w http.ResponseWriter, r *http.Request) ([]byte, string, bool) {
 	var in struct {
 		URL string `json:"url"`
 	}
 	if err := json.NewDecoder(io.LimitReader(r.Body, 1<<20)).Decode(&in); err != nil {
 		writeErr(w, http.StatusBadRequest, "bad_request", err.Error())
-		return
+		return nil, "", false
 	}
 	u, err := fetch.ParseHTTP(in.URL)
 	if err != nil {
 		writeErr(w, http.StatusBadRequest, "bad_url", "")
-		return
+		return nil, "", false
 	}
 	ctx, cancel := context.WithTimeout(r.Context(), fetchTimeout)
 	defer cancel()
@@ -293,9 +301,48 @@ func (s *Server) handleSearchURL(w http.ResponseWriter, r *http.Request) {
 		default:
 			writeErr(w, http.StatusBadGateway, "fetch_failed", err.Error())
 		}
+		return nil, "", false
+	}
+	return data, ct, true
+}
+
+func (s *Server) handleSearchURL(w http.ResponseWriter, r *http.Request) {
+	if data, ct, ok := s.fetchURL(w, r); ok {
+		s.search(w, r, data, ct)
+	}
+}
+
+func (s *Server) handleFetchURL(w http.ResponseWriter, r *http.Request) {
+	if data, ct, ok := s.fetchURL(w, r); ok {
+		writeJSON(w, http.StatusOK, map[string]string{"query": s.storeQuery(data, ct)})
+	}
+}
+
+func (s *Server) storedQuery(id string) (storedQuery, bool) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for _, q := range s.queries {
+		if q.id == id {
+			return q, true
+		}
+	}
+	return storedQuery{}, false
+}
+
+func (s *Server) handleSearchQuery(w http.ResponseWriter, r *http.Request) {
+	var in struct {
+		Query string `json:"query"`
+	}
+	if err := json.NewDecoder(io.LimitReader(r.Body, 1<<12)).Decode(&in); err != nil {
+		writeErr(w, http.StatusBadRequest, "bad_request", err.Error())
 		return
 	}
-	s.search(w, r, data, ct)
+	q, ok := s.storedQuery(in.Query)
+	if !ok {
+		writeErr(w, http.StatusNotFound, "no_query", "")
+		return
+	}
+	s.searchAs(w, r, q.data, q.ct, q.id)
 }
 
 func (s *Server) handleQueryImage(w http.ResponseWriter, r *http.Request) {

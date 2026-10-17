@@ -26,6 +26,10 @@
 
   let settings = { lang: "", rowCap: 4, variant: 0, rerank: true, idleUnload: false, idleMinutes: 10, offline: true };
   let idleDeadline = 0;
+  let fx = null;
+  let freshCards = false;
+  let freshQuery = false;
+  const FX = { aber: 2, cols: 6, breakEvery: 250, liftMs: 980, liftShift: 3, liftScale: 1.03, glitchEvery: 3200, glitchFrac: 0.08, glitchShift: 14, grain: 0.02, wobble: 0.5, wobbleHz: 1, minMs: 900, fadeMs: 1300 };
   let idleTimer = 0;
   let liveRowCap = 4;
   let lang = "en";
@@ -283,14 +287,169 @@
     if (!qtile) {
       qtile = document.createElement("div");
       qtile.className = "qtile";
-      qtile.innerHTML = '<div class="qframe"><img alt=""></div><span class="qlabel"></span><span class="spin"></span>';
+      qtile.innerHTML = '<div class="qframe"><img alt="" draggable="false"></div><span class="qlabel"></span>';
       qtile.querySelector(".qlabel").textContent = t("query.label");
       el.spacer.appendChild(qtile);
     }
-    const img = qtile.querySelector("img");
+    const img = qtile.querySelector(".qframe > img");
     if (query.src && img.getAttribute("src") !== query.src) img.src = query.src;
     if (!query.src) img.removeAttribute("src");
-    qtile.classList.toggle("searching", searching);
+    if (freshQuery) {
+      freshQuery = false;
+      qtile.classList.remove("pq-in");
+      void qtile.offsetWidth;
+      qtile.classList.add("pq-in");
+    }
+  }
+
+  function div(cls) {
+    const d = document.createElement("div");
+    d.className = cls;
+    return d;
+  }
+
+  function fxFilters() {
+    if (document.getElementById("bsChanR")) return;
+    const ns = "http://www.w3.org/2000/svg";
+    const svg = document.createElementNS(ns, "svg");
+    svg.setAttribute("width", "0");
+    svg.setAttribute("height", "0");
+    svg.style.position = "absolute";
+    for (const [id, values] of [["bsChanR", "1 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0 0 0 1 0"], ["bsChanGB", "0 0 0 0 0  0 1 0 0 0  0 0 1 0 0  0 0 0 1 0"]]) {
+      const f = document.createElementNS(ns, "filter");
+      f.setAttribute("id", id);
+      const m = document.createElementNS(ns, "feColorMatrix");
+      m.setAttribute("type", "matrix");
+      m.setAttribute("values", values);
+      f.appendChild(m);
+      svg.appendChild(f);
+    }
+    document.body.appendChild(svg);
+  }
+
+  function fxStart() {
+    if (!qtile || window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+    const frame = qtile.querySelector(".qframe");
+    const img = frame.querySelector(":scope > img");
+    if (!img.getAttribute("src")) return;
+    if (!img.complete || !img.naturalWidth) {
+      img.addEventListener("load", () => { if (searching) fxStart(); }, { once: true });
+      return;
+    }
+    const bw = frame.clientWidth, bh = frame.clientHeight;
+    if (!bw || !bh) return;
+    const sc = Math.min(bw / img.naturalWidth, bh / img.naturalHeight);
+    const w = Math.round(img.naturalWidth * sc), h = Math.round(img.naturalHeight * sc);
+    const key = img.src + "|" + w + "x" + h;
+    if (fx && fx.key === key && !fx.ending) return;
+    fxKill();
+    fxFilters();
+    const box = div("qfx");
+    box.style.left = Math.round((bw - w) / 2) + "px";
+    box.style.top = Math.round((bh - h) / 2) + "px";
+    box.style.width = w + "px";
+    box.style.height = h + "px";
+    const wrap = div("qfx-wrap");
+    box.appendChild(wrap);
+    for (const [cls, dx] of [["qfx-red", -FX.aber], ["qfx-cyan", FX.aber]]) {
+      const g = new Image();
+      g.className = "qfx-ghost " + cls;
+      g.src = img.src;
+      g.style.transform = "translateX(" + dx + "px)";
+      wrap.appendChild(g);
+    }
+    const tiles = div("qfx-tiles");
+    const cols = FX.cols, rows = Math.max(1, Math.round((cols * h) / w));
+    tiles.style.gridTemplateColumns = "repeat(" + cols + ",1fr)";
+    tiles.style.gridTemplateRows = "repeat(" + rows + ",1fr)";
+    const cw = w / cols, ch = h / rows, cells = [];
+    for (let i = 0; i < cols * rows; i++) {
+      const c = div("qfx-tile");
+      c.style.backgroundImage = 'url("' + img.src + '")';
+      c.style.backgroundSize = w + "px " + h + "px";
+      c.style.backgroundPosition = -((i % cols) * cw) + "px " + -(Math.floor(i / cols) * ch) + "px";
+      tiles.appendChild(c);
+      cells.push(c);
+    }
+    wrap.appendChild(tiles);
+    for (const cls of ["qfx-grid", "qfx-scan", "qfx-band"]) wrap.appendChild(div(cls));
+    const grain = document.createElement("canvas");
+    grain.className = "qfx-grain";
+    grain.width = 160;
+    grain.height = 120;
+    wrap.appendChild(grain);
+    const tear = div("qfx-tear");
+    const tearImg = new Image();
+    tearImg.src = img.src;
+    tear.appendChild(tearImg);
+    wrap.appendChild(tear);
+    box.appendChild(div("qfx-vign"));
+    frame.appendChild(box);
+    img.classList.add("fx-hidden");
+    const f = (fx = { box, img, key, ending: false, raf: 0, timers: [], started: performance.now() });
+    const wobble = (ts) => {
+      const tt = (ts - f.started) / 1000, hz = FX.wobbleHz;
+      const x = FX.wobble * (0.6 * Math.sin(tt * 2 * Math.PI * hz) + 0.4 * Math.sin(tt * 2 * Math.PI * hz * 2.33 + 1.7));
+      const y = FX.wobble * 0.35 * Math.sin(tt * 2 * Math.PI * hz * 1.13 + 0.8);
+      wrap.style.transform = "translate(" + x.toFixed(2) + "px," + y.toFixed(2) + "px)";
+      f.raf = requestAnimationFrame(wobble);
+    };
+    f.raf = requestAnimationFrame(wobble);
+    f.timers.push(setInterval(() => {
+      const c = cells[Math.floor(Math.random() * cells.length)];
+      if (c.classList.contains("lift")) return;
+      const dx = (Math.random() * 2 - 1) * FX.liftShift, dy = (Math.random() * 2 - 1) * FX.liftShift;
+      c.style.transform = "translate(" + dx + "px," + dy + "px) scale(" + FX.liftScale + ")";
+      c.classList.add("lift");
+      setTimeout(() => { c.classList.remove("lift"); c.style.transform = ""; }, FX.liftMs);
+    }, FX.breakEvery));
+    f.timers.push(setInterval(() => {
+      if (f.ending) return;
+      const bandH = h * FX.glitchFrac, y = Math.random() * (h - bandH);
+      tear.style.top = y + "px";
+      tear.style.height = bandH + "px";
+      tear.style.display = "block";
+      tearImg.style.top = -y + "px";
+      tearImg.style.height = h + "px";
+      tearImg.style.transform = "translateX(" + (Math.random() < 0.5 ? -1 : 1) * FX.glitchShift + "px)";
+      setTimeout(() => { tear.style.display = "none"; }, 120);
+    }, FX.glitchEvery));
+    const gctx = grain.getContext("2d");
+    const gid = gctx.createImageData(160, 120);
+    f.timers.push(setInterval(() => {
+      const d = gid.data;
+      for (let i = 0; i < d.length; i += 4) {
+        d[i] = d[i + 1] = d[i + 2] = (Math.random() * 255) | 0;
+        d[i + 3] = Math.random() < 0.5 ? FX.grain * 255 : 0;
+      }
+      gctx.putImageData(gid, 0, 0);
+    }, 80));
+  }
+
+  function fxEnd() {
+    const f = fx;
+    if (!f || f.ending) return;
+    const wait = Math.max(0, FX.minMs - (performance.now() - f.started));
+    setTimeout(() => {
+      if (fx !== f || f.ending) return;
+      f.ending = true;
+      f.timers.forEach(clearInterval);
+      f.timers = [];
+      cancelAnimationFrame(f.raf);
+      f.box.classList.add("end");
+      f.img.classList.remove("fx-hidden");
+      setTimeout(() => { if (fx === f) fxKill(); }, FX.fadeMs);
+    }, wait);
+  }
+
+  function fxKill() {
+    const f = fx;
+    if (!f) return;
+    f.timers.forEach(clearInterval);
+    cancelAnimationFrame(f.raf);
+    f.box.remove();
+    f.img.classList.remove("fx-hidden");
+    fx = null;
   }
 
   function render() {
@@ -320,6 +479,7 @@
         let card = cards.get(i);
         if (!card) {
           card = makeCard(i);
+          if (freshCards) card.classList.add("card-in");
           cards.set(i, card);
           el.spacer.appendChild(card);
         }
@@ -335,6 +495,8 @@
     for (const [i, card] of cards) {
       if (!keep.has(i)) { card.remove(); cards.delete(i); }
     }
+    freshCards = false;
+    if (searching) fxStart();
   }
 
   function queueRender() {
@@ -350,8 +512,10 @@
   }
 
   function setQuery(src) {
+    fxKill();
     if (query && query.blob) URL.revokeObjectURL(query.src);
     query = { src, blob: !!src && src.startsWith("blob:") };
+    freshQuery = true;
   }
 
   async function runSearch(send, src) {
@@ -366,10 +530,11 @@
     tickCountdown();
     if (state && state.encoder.state === "unloaded") setTimeout(poll, 300);
     try {
-      const res = await send();
+      const res = await send(() => seq === searchSeq);
       if (seq !== searchSeq) return;
       if (!query.src) query.src = withToken("/api/query/" + res.query);
       results = res.results || [];
+      freshCards = true;
       lastSearch = res;
       setMessage({ done: res });
     } catch (e) {
@@ -380,6 +545,7 @@
       if (seq === searchSeq) {
         searching = false;
         render();
+        fxEnd();
         poll();
       }
     }
@@ -391,7 +557,15 @@
   }
 
   function searchURL(url) {
-    return runSearch(() => api("/api/search/url", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ url }) }), null);
+    const json = { method: "POST", headers: { "Content-Type": "application/json" } };
+    return runSearch(async (current) => {
+      const f = await api("/api/fetch", Object.assign({ body: JSON.stringify({ url }) }, json));
+      if (current()) {
+        query.src = withToken("/api/query/" + f.query);
+        render();
+      }
+      return api("/api/search/query", Object.assign({ body: JSON.stringify({ query: f.query }) }, json));
+    }, null);
   }
 
   function urlFromDrop(dt) {
