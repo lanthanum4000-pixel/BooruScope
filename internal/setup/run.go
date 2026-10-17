@@ -58,24 +58,27 @@ func Run(opt Options) error {
 		<-srv.Quit()
 		life.Quit()
 	}()
+	profile := ""
+	var exited chan bool
 	if !opt.NoWindow {
 		if b, err := browser.Find(opt.BrowserPath); err == nil {
-			profile, _ := os.MkdirTemp("", "booruscope-setup-")
+			removeLegacyProfiles(opt.Logf)
+			profile = setupProfileDir()
 			t0 := time.Now()
 			cmd, err := browser.LaunchApp(b, url, profile, nil)
 			if err != nil {
 				opt.Logf("window: %v", err)
 				life.NoBrowserProcess()
+				profile = ""
 			} else {
 				opt.Logf("window: %s (%s)", b.Kind, b.Path)
+				exited = make(chan bool, 1)
 				go func() {
 					cmd.Wait()
 					ran := time.Since(t0)
 					opt.Logf("window: browser process exited after %v", ran.Round(time.Millisecond))
 					life.BrowserExited(ran)
-					if ran >= localweb.HandoffWindow {
-						os.RemoveAll(profile)
-					}
+					exited <- ran >= localweb.HandoffWindow
 				}()
 			}
 		} else {
@@ -90,5 +93,18 @@ func Run(opt Options) error {
 	srv.Installer().Cancel()
 	sctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
-	return httpSrv.Shutdown(sctx)
+	err = httpSrv.Shutdown(sctx)
+	if exited != nil {
+		select {
+		case own := <-exited:
+			if own {
+				if rerr := removeProfile(profile, 20, 250*time.Millisecond); rerr != nil {
+					opt.Logf("setup: browser profile left in %s: %v", profile, rerr)
+				}
+			}
+		case <-time.After(5 * time.Second):
+			opt.Logf("setup: window still open; browser profile kept in %s", profile)
+		}
+	}
+	return err
 }

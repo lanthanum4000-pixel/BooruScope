@@ -13,6 +13,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"sync"
 	"testing"
@@ -441,5 +442,40 @@ func TestInstallCarriesLanguageToApp(t *testing.T) {
 	}
 	if s := read(); s["lang"] != "ja" {
 		t.Fatalf("unknown language overwrote the setting: %v", s)
+	}
+}
+
+func TestRemoveLegacyProfilesKeepsCurrentAndOtherFiles(t *testing.T) {
+	tmp := t.TempDir()
+	t.Setenv("TMP", tmp)
+	t.Setenv("TEMP", tmp)
+	t.Setenv("TMPDIR", tmp)
+	for _, d := range []string{"booruscope-setup-123", "booruscope-setup-abc/Default", profileName, "other-dir"} {
+		if err := os.MkdirAll(filepath.Join(tmp, d), 0o755); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := os.WriteFile(filepath.Join(tmp, "booruscope-setup.log"), []byte("x"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(tmp, "booruscope-setup-note"), []byte("x"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	removeLegacyProfiles(t.Logf)
+	var left []string
+	entries, _ := os.ReadDir(tmp)
+	for _, e := range entries {
+		left = append(left, e.Name())
+	}
+	want := []string{"booruscope-setup-note", profileName, "booruscope-setup.log", "other-dir"}
+	slices.Sort(want)
+	if !slices.Equal(left, want) {
+		t.Fatalf("left %v, want %v", left, want)
+	}
+	if setupProfileDir() != filepath.Join(tmp, profileName) {
+		t.Fatalf("profile dir %s", setupProfileDir())
+	}
+	if err := removeProfile(filepath.Join(tmp, profileName), 2, time.Millisecond); err != nil {
+		t.Fatal(err)
 	}
 }
